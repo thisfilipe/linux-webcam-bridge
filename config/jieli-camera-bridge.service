@@ -1,0 +1,12 @@
+[Unit]
+Description=Jieli 720p30 Linux webcam bridge
+After=pipewire.service wireplumber.service
+
+[Service]
+ExecStart=/usr/bin/python3 "%h/.local/libexec/jieli-camera-bridge.py"
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+
+[Install]
+WantedBy=default.target

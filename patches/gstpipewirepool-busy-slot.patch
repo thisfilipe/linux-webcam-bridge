@@ -1,0 +1,72 @@
+--- a/src/gst/gstpipewirepool.c
++++ b/src/gst/gstpipewirepool.c
+@@ -253,6 +253,9 @@
+   g_autoptr (GstPipeWireStream) s = g_weak_ref_get (&p->stream);
+   GstPipeWirePoolData *data;
+   struct pw_buffer *b;
++  guint attempts, retry_msec;
++  int dequeue_errno;
++  gboolean signaled, retry;
+ 
+   if (G_UNLIKELY (!s))
+     return GST_FLOW_ERROR;
+@@ -262,7 +265,19 @@
+     if (G_UNLIKELY (GST_BUFFER_POOL_IS_FLUSHING (pool)))
+       goto flushing;
+ 
+-    if ((b = pw_stream_dequeue_buffer(s->pwstream))) {
++    /* A busy output buffer is put back at the end of the dequeue queue.
++     * Try the other slots before sleeping: a driving stream cannot signal
++     * another process cycle until render has acquired and queued a buffer.
++     * Bound the scan so a pool with every buffer busy can wait.
++     */
++    attempts = MAX (p->n_buffers, 1u);
++    do {
++      if (G_UNLIKELY (GST_BUFFER_POOL_IS_FLUSHING (pool)))
++        goto flushing;
++      b = pw_stream_dequeue_buffer (s->pwstream);
++    } while (b == NULL && errno == EBUSY && --attempts > 0);
++
++    if (b) {
+       GST_LOG_OBJECT (pool, "dequeued buffer %p", b);
+       break;
+     }
+@@ -276,8 +291,36 @@
+         goto paused;
+     }
+ 
+-    GST_WARNING_OBJECT (pool, "failed to dequeue buffer: %s", strerror(errno));
+-    g_cond_wait (&p->cond, GST_OBJECT_GET_LOCK (pool));
++    dequeue_errno = errno;
++    /* queue_pop() uses EPIPE for an empty buffer queue; the reliable-output
++     * path uses EAGAIN when output/queued IO is not yet clear. Neither means
++     * that the PipeWire connection has failed. All three can become ready
++     * without another process callback waking this pool.
++     */
++    retry = dequeue_errno == EBUSY || dequeue_errno == EPIPE || dequeue_errno == EAGAIN;
++    /* A frame lasts only 33 ms at 30 fps. Retry an active pool promptly,
++     * while avoiding frequent wakeups when it has no buffers or is paused.
++     */
++    retry_msec = p->n_buffers > 0 && !p->paused ? 1u : 10u;
++    GST_DEBUG_OBJECT (pool,
++        "acquire wait: errno=%d (%s), buffers=%u, paused=%d, timed=%d, retry_ms=%u",
++        dequeue_errno, strerror (dequeue_errno), p->n_buffers, p->paused,
++        retry, retry_msec);
++    if (retry) {
++      /* The consumer can release the shared busy count without another
++       * process notification. A driving publisher must retry independently
++       * or it cannot render the frame that would trigger the next cycle.
++       */
++      signaled = g_cond_wait_until (&p->cond, GST_OBJECT_GET_LOCK (pool),
++          g_get_monotonic_time () + retry_msec * G_TIME_SPAN_MILLISECOND);
++    } else {
++      g_cond_wait (&p->cond, GST_OBJECT_GET_LOCK (pool));
++      signaled = TRUE;
++    }
++    GST_DEBUG_OBJECT (pool,
++        "acquire resumed: timed=%d, signaled=%d, buffers=%u, paused=%d, flushing=%d",
++        retry, signaled, p->n_buffers, p->paused,
++        GST_BUFFER_POOL_IS_FLUSHING (pool));
+   }
+ 
+   data = b->user_data;
