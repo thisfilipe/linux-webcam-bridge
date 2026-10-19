@@ -560,7 +560,7 @@ until the native publisher passes G6 on real hardware.
 | Phase | Deliverable | Gate | Effort* |
 |---|---|---|---|
 | P0 | Oracle plus parity harness | G0 | 1–2 d |
-| P0b | Isolated `pipewire-rs` spike | 4.4 (7/8; #5378 gate at P4a) | 2–4 d |
+| P0b | Isolated `pipewire-rs` spike | 4.4 (6/8 full; #3 partial; #6 at P4a) | 2–4 d |
 | P1 | `jieli-core`: state, framing, placeholder, JSON | G3 | 4–6 d |
 | P2 | Rust helper or decision C | G1 | 2–3 d |
 | P3 | Supervisor plus `gstreamer-rs` capture, Python publisher | G4–G5 | 4–6 d |
