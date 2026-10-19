@@ -119,9 +119,15 @@ artefact validated on hardware.
 | 9 | Python | 535 + 271 lines | 531 + 267 lines |
 | 10 | Docs | kernel 7.1.5 | kernel 7.2.6 |
 
-**Proposed rule:** parity against the **live** behaviour for everything the user
-can observe; adopt the repository's XDG corrections only after revalidating them
-on hardware. Divergences 1 and 2 require an explicit decision.
+**Decision (2026-10-19):** the **live behaviour is canonical** for everything
+the user can observe. This settles divergences 1, 2, 4 and 5 in favour of live:
+the PT placeholder, the `Jieli` fallback for `video10`, no automatic node rename
+under `--test-source`, and the live unit text. The repository's XDG corrections
+(3) are not adopted now; revisit only after a separate hardware revalidation.
+The absent manifest (6) is an installer-safety gap, not observable camera
+behaviour: the Rust installer may add a manifest, provided the runtime behaviour
+does not change. The installed plugin hash (8) disappears with the native
+publisher; it is not a behaviour to preserve.
 
 ### 1.5 Automated baseline
 
@@ -184,10 +190,10 @@ resetting, settling, exhausted, helper-unavailable, streaming`.
 
 | ID | Contract | Value |
 |---|---|---|
-| C1 | Identity | `jieli_720p30` / `Jieli 720p30` (test source: `jieli_validation` / `Jieli validation`) |
+| C1 | Identity | `jieli_720p30` / `Jieli 720p30`; `--test-source` keeps `--node-name` (default `jieli_720p30`) and only changes the description to `Jieli validation`; no automatic rename |
 | C2 | Properties | `Video/Source`, `Camera`, `node.virtual=TRUE`, `node.pause-on-idle=FALSE`, `priority.session=1000`, driver/want-driver, live |
 | C3 | Format | I420 1280x720 30/1 |
-| C4 | Placeholder | after 250 ms; Y=32, text=235, UV=128; never replays a real frame; 30 fps |
+| C4 | Placeholder | after 250 ms; Y=32, text=235, UV=128; PT text `CAMERA INDISPONIVEL` / `RECONECTANDO`; full-frame SHA-256 `b7d72d08e173e810d3fc72b0c8f52ac954cbb6f4dfd627e06fe1666ec8b387d2`; never replays a real frame; 30 fps |
 | C5 | Pipe | partial reads accumulate; EOF terminates |
 | C6 | Retained buffer | never overwrite; closing/reopening a consumer does not recreate capture or publication |
 | C7 | No stall | scan `n_buffers` slots on `EBUSY`; retry 1 ms (active) / 10 ms (empty/paused) for `EBUSY/EPIPE/EAGAIN` |
@@ -363,21 +369,16 @@ create/destroy.
 
 ### 3.6 Helper: integrity and reproducibility
 
-The current model installs **the Python source bytes** after checking
-`HELPER_SHA256`; the root artefact is byte-identical to the reviewed source. A
-Rust binary is not bit-reproducible by default. Options:
-
-- **A.** Reproducible build plus a published SHA-256 (pinned toolchain,
-  `--remap-path-prefix`, `SOURCE_DATE_EPOCH`, `Cargo.lock`). Changes the
-  “no binaries in the repository” policy.
-- **B.** Local build plus source hash, without a binary pin. Weakens the
-  guarantee.
-- **C.** Keep the helper in Python (125 lines, `-I`, source hash pinned) and port
-  the rest.
-
-**Recommendation:** A only if two independent builds are bit-identical;
-otherwise **C**. Do not choose B silently. The sudoers rule and the path do not
-change if the no-argument interface is preserved.
+**Decision (2026-10-19): Rust helper, no Python.** Implement option A: a
+reproducible release build plus a published SHA-256 (pinned toolchain,
+`Cargo.lock`, `--remap-path-prefix`, `SOURCE_DATE_EPOCH`, deterministic strip).
+The repository keeps source and build recipe; the binary is a release artefact,
+not a tracked file. The installer records the installed hash in its manifest and
+verifies it before replacement/removal. If two independent builds are not
+bit-identical, fix reproducibility or change the integrity model explicitly; do
+**not** silently fall back to Python. The sudoers rule and the
+`/usr/local/libexec/jieli-usb-reset` path remain unchanged because the
+no-argument interface is preserved.
 
 **Design:** `struct VerifiedDevice(OwnedFd)` constructed only by
 `open_verified()`, and `reset(&VerifiedDevice)` receiving the already-validated
@@ -586,10 +587,10 @@ helper and sudoers rule do not change if the path/interface are preserved.
 | # | Decision | Recommendation | Blocks |
 |---|---|---|---|
 | 1 | `libclang` for `pipewire-sys` | resolved in P0b by local extraction; system install optional | — |
-| 2 | Helper: reproducible Rust (A) or Python (C) | A only if bit-identical; otherwise C | P2 |
+| 2 | Helper implementation | **Rust only** (A); reproducible build plus SHA-256; no Python fallback | P2 |
 | 3 | GStreamer: keep in capture or remove | keep `gstreamer-rs` | P1/P3 |
 | 4 | Native publisher with watchdog or fallback 2a | proceed with native publisher; keep 2a; watchdog gate at P4a | P4a |
-| 5 | Baseline: live (PT/fallback) or HEAD (EN/XDG) | live for visible behaviour; XDG after revalidation | G0 |
+| 5 | Baseline: live (PT/fallback) or HEAD (EN/XDG) | **live** for visible behaviour; XDG only after a separate revalidation | G0 |
 | 6 | Installers: now or in P6 | in P6 | P6 |
 | 7 | Hardware windows (stop service, suspend/hibernate/unplug) | define who/when | G4–G8 |
 | 8 | Publisher heartbeat/watchdog | after cutover | — |
@@ -664,8 +665,10 @@ helper and sudoers rule do not change if the path/interface are preserved.
 | 2026-10-19 | P0b errno | raw dequeue exposes `EBUSY`; `EPIPE`/`EAGAIN` mapped but not reproduced |
 | 2026-10-19 | P0b stress | 1,000 create/destroy cycles clean; 30 fps; ~0.4% CPU in release |
 | 2026-10-19 | P0b wedge | #5378 not reproduced; reconnect recovered; watchdog/recreation is a P4a gate |
+| 2026-10-19 | Baseline decision | **live** behaviour canonical: PT placeholder, `Jieli` fallback, no `--test-source` rename, live unit text; XDG deferred |
+| 2026-10-19 | Helper decision | **Rust only**, no Python; reproducible build + SHA-256 manifest |
 
-**Next step:** confirm the baseline choice (§1.4/§7) and start P1
-(`jieli-core`: pure state, framing, placeholder, JSON), with the remaining P0b
-items (EPIPE/EAGAIN reproduction, meta header population, watchdog/recreation)
-folded into P4a. No runtime change until G8.
+**Next step:** P1 (`jieli-core`: pure state, framing, placeholder, JSON) against
+the live oracle. The remaining P0b items (EPIPE/EAGAIN reproduction, meta header
+population, watchdog/recreation) are folded into P4a. No runtime change until
+G8.
