@@ -667,8 +667,9 @@ helper and sudoers rule do not change if the path/interface are preserved.
 | 2026-10-19 | P0b wedge | #5378 not reproduced; reconnect recovered; watchdog/recreation is a P4a gate |
 | 2026-10-19 | Baseline decision | **live** behaviour canonical: PT placeholder, `Jieli` fallback, no `--test-source` rename, live unit text; XDG deferred |
 | 2026-10-19 | Helper decision | **Rust only**, no Python; reproducible build + SHA-256 manifest |
+| 2026-10-19 | P1 core foundation | workspace plus `jieli-core`: 36 tests covering frame ownership, PT placeholder hash, framing, report and the state machine |
 
-**Next step:** P1 (`jieli-core`: pure state, framing, placeholder, JSON) against
-the live oracle. The remaining P0b items (EPIPE/EAGAIN reproduction, meta header
-population, watchdog/recreation) are folded into P4a. No runtime change until
-G8.
+**Next step:** finish P1 parity mapping and start P2 (Rust USB reset helper) or
+P3 (supervisor plus GStreamer capture). The remaining P0b items
+(EPIPE/EAGAIN reproduction, meta header population, watchdog/recreation) are
+folded into P4a. No runtime change until G8.
