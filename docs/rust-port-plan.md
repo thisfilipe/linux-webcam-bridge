@@ -389,8 +389,11 @@ fd. `unsafe` confined to ioctl/signal; no `clap`/`serde`/`tokio`.
 `jieli-usb-reset` binary. The pure checks (discovery uniqueness, char major/minor
 address, descriptor identity, lock ownership/mode/link count, 8 s cooldown) and
 the injected reset sequence (cooldown before device access, one ioctl on the
-verified fd) have 24 unit tests plus 2 CLI tests. Reproducible build recipe and
-installer/manifest changes are still pending, so the Python helper stays
+verified fd) have 24 unit tests plus 2 CLI tests. `tools/build-helper.sh`
+performs two independent release builds with path remapping and emits the
+SHA-256 manifest; both builds are byte-identical (current hash
+`8b82d909212be61ab7c148869012623688b4212d483c1dabee53d03c5499684b`).
+Installer/manifest integration is still pending, so the Python helper stays
 installed until P5/P6.
 
 ---
@@ -680,6 +683,7 @@ helper and sudoers rule do not change if the path/interface are preserved.
 | 2026-10-19 | P2 helper | `jieli-usb` / `jieli-usb-reset` parity implementation with 24 unit + 2 CLI tests; installer and reproducible build still pending |
 | 2026-10-19 | P4a PipeWire publisher | `jieli-publisher` native PipeWire + stdin framing/placeholder + CLI/PID/signals + V4L2 discovery; smoke 118 frames in ~4 s; live service unaffected; V4L2 writer pending |
 | 2026-10-19 | P3 test-source supervisor | `jieli-bridge --test-source`: `gstreamer-rs` 0.24.5 (GStreamer 1.24.2) `videotestsrc -> appsink -> publisher stdin`; state/report E2E 300 frames/10 s at 29.98 fps; consumer received 119 frames/4 s; real V4L2 capture, logind/sleep and helper reset still pending |
+| 2026-10-19 | P2 reproducibility | `tools/build-helper.sh` builds twice with remapped paths; byte-identical `jieli-usb-reset` (SHA-256 `8b82d909...`); installer wiring pending |
 
 **Next step:** finish P3 with real V4L2 capture, logind sleep handling and
 helper reset, then P4b (native V4L2 writer), then installers/manifest. The
