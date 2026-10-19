@@ -384,6 +384,14 @@ no-argument interface is preserved.
 `open_verified()`, and `reset(&VerifiedDevice)` receiving the already-validated
 fd. `unsafe` confined to ioctl/signal; no `clap`/`serde`/`tokio`.
 
+**Status (2026-10-19):** implemented as `crates/jieli-usb` with the
+`jieli-usb-reset` binary. The pure checks (discovery uniqueness, char major/minor
+address, descriptor identity, lock ownership/mode/link count, 8 s cooldown) and
+the injected reset sequence (cooldown before device access, one ioctl on the
+verified fd) have 24 unit tests plus 2 CLI tests. Reproducible build recipe and
+installer/manifest changes are still pending, so the Python helper stays
+installed until P5/P6.
+
 ---
 
 ## 4. Parity and testing
@@ -668,8 +676,9 @@ helper and sudoers rule do not change if the path/interface are preserved.
 | 2026-10-19 | Baseline decision | **live** behaviour canonical: PT placeholder, `Jieli` fallback, no `--test-source` rename, live unit text; XDG deferred |
 | 2026-10-19 | Helper decision | **Rust only**, no Python; reproducible build + SHA-256 manifest |
 | 2026-10-19 | P1 core foundation | workspace plus `jieli-core`: 36 tests covering frame ownership, PT placeholder hash, framing, report and the state machine |
+| 2026-10-19 | P2 helper | `jieli-usb` / `jieli-usb-reset` parity implementation with 24 unit + 2 CLI tests; installer and reproducible build still pending |
 
-**Next step:** finish P1 parity mapping and start P2 (Rust USB reset helper) or
-P3 (supervisor plus GStreamer capture). The remaining P0b items
-(EPIPE/EAGAIN reproduction, meta header population, watchdog/recreation) are
-folded into P4a. No runtime change until G8.
+**Next step:** start P3 (supervisor plus GStreamer capture) or finish the P2
+packaging path (reproducible helper build plus installer manifest). The remaining
+P0b items (EPIPE/EAGAIN reproduction, meta header population,
+watchdog/recreation) are folded into P4a. No runtime change until G8.
