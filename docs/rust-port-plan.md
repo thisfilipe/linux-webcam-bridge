@@ -330,7 +330,15 @@ tests/                           # integration + parity harness
     trigger_process() according to pacing
 ```
 
-**Flags:** `DRIVER | ALLOC_BUFFERS | MAP_BUFFERS` (not just `DRIVER | MAP_BUFFERS`).
+**Flags:** `DRIVER | MAP_BUFFERS`. Do **not** add `ALLOC_BUFFERS` unless the
+publisher implements and validates its own buffer pool. In the isolated P0b
+spike, `ALLOC_BUFFERS` produced three data blocks with `maxsize=0`, `fd=-1` and
+no usable memory; removing it let the consumer-allocated pool provide valid
+MemFd buffers (`maxsize=1,382,400`, mapped `data`, `short=0`). This matches the
+live `pipewiresink` path when the GStreamer shared-memory allocator is absent.
+The live sink additionally uses `ASYNC | EARLY_PROCESS`; those flags are not
+exposed by `pipewire-rs` 0.10.1 `StreamFlags` and can be added through a raw
+seam only if latency measurements require them.
 
 **`trigger_process`:** it exists, but is gated by
 `#[cfg(feature = "v0_3_34")]`; use `features = ["v0_3_50"]`.
@@ -438,8 +446,11 @@ without root and without stopping the service.
 
 **Prerequisites:**
 
-- `libclang-dev` (and `clang`) installed — **blocking**; `pipewire-sys` always
-  runs bindgen;
+- a `libclang` shared library available to `bindgen`; `pipewire-sys` always
+  runs bindgen. A system install is one option; P0b instead extracted
+  `libclang-18-dev`, `libclang-common-18-dev` and `libclang1-18` into a
+  temporary prefix, with no root and no persistent system change. A system
+  install remains optional and can use `pkexec`/`sudo` if preferred;
 - the existing sysroot with PipeWire 1.6.8 and GStreamer 1.24.2 headers/.pc;
 - `pipewire` 0.10.1 with `features = ["v0_3_50"]`;
 - network access to crates.io (confirmed).
@@ -447,7 +458,8 @@ without root and without stopping the service.
 **Criteria (all):**
 
 1. builds with libclang plus the sysroot;
-2. `DRIVER | ALLOC_BUFFERS | MAP_BUFFERS` plus `trigger_process()`;
+2. `DRIVER | MAP_BUFFERS` plus `trigger_process()`; `ALLOC_BUFFERS` is tested
+   separately and must not be enabled without a native pool;
 3. errno visible through `dequeue_raw_buffer` plus `last_os_error()`; distinguishes
    `EBUSY/EPIPE/EAGAIN`;
 4. node with 3 I420 planes (Y 921,600, U 230,400, V 230,400) and `pw-dump`
@@ -459,6 +471,63 @@ without root and without stopping the service.
 
 If it fails, fallback 2a: `gstreamer-rs` plus the C patch, keeping the
 supervisor/helper/installers in Rust.
+
+### 4.5 Phase 0b results (measured 2026-10-19)
+
+**Setup.** The spike lived in an isolated temporary directory outside the
+repository. It used the existing sysroot, `pipewire` 0.10.1 with
+`features = ["v0_3_50"]`, and a locally extracted `libclang`; no system package
+was installed, no root command was used and `jieli-camera-bridge.service`
+stayed active. `LIBCLANG_PATH` pointed at the extracted library and
+`BINDGEN_EXTRA_CLANG_ARGS` supplied the clang resource directory and the GCC
+include directory. First debug build: ~9.5 s; release build: ~15.5 s; release
+binary 718 KB.
+
+**Results.**
+
+| # | Criterion | Result | Evidence |
+|---|---|---|---|
+| 1 | Build with libclang + sysroot | **pass** | `pipewire-sys` bindgen plus `pipewire` 0.10.1 built against the sysroot; no system install |
+| 2 | Flags + `trigger_process` | **pass with correction** | `DRIVER \| MAP_BUFFERS` works; `ALLOC_BUFFERS` removed (see below); the timer calls `trigger_process()` only while Streaming |
+| 3 | errno via raw dequeue | **partial pass** | `dequeue_raw_buffer()` plus `last_os_error()` returned `errno=16` (`EBUSY`) 15 times while a consumer held buffers; `EPIPE`/`EAGAIN` are mapped but were not independently observed |
+| 4 | 3 I420 planes + `pw-dump` parity | **pass** | 3 data blocks at runtime; Y 921,600, U/V 230,400, strides 1280/640; node properties match the live node except ids/serial, `media.name`, test name/description and `node.loop.name` |
+| 5 | Retention + consumer dies holding a buffer | **pass** | `SIGSTOP` consumer → EBUSY; `SIGKILL` → Paused; a new consumer → Streaming and frames resumed |
+| 6 | Recovery by stream recreation when no progress | **not proven** | The #5378 wedge did not reproduce; reconnect recovered without recreation (168 → 318 frames). Watchdog/recreation remains a P4a requirement |
+| 7 | 1,000 create/destroy cycles | **pass** | exit 0, no panic/UAF; `cycles done 1000` |
+| 8 | CPU/RSS/fps | **pass for publication** | release: ~0.4% CPU average (0.3% current), RSS ~39.5 MB, 30.0 fps (240 frames); consumer ~0.2%. The live Python publisher uses ~2.8% CPU and ~45 MB RSS, but includes camera capture |
+
+**Buffer flag finding.** With `ALLOC_BUFFERS` the stream still reported
+`n_datas=3`, but each block had `type=MemId(4)`, `maxsize=0`, `fd=-1` and
+`data=(void*)-1`; every frame had three short blocks and no usable pixels.
+Without `ALLOC_BUFFERS`, the consumer-allocated pool gave `type=MemFd(2)`,
+`maxsize=1,382,400`, a valid `fd`, mapped `data` and `short=0`. The native
+publisher must therefore follow the live `pipewiresink` behaviour (consumer
+allocates) until it implements a native pool.
+
+**Consumer harness finding.** In this environment `pipewiresrc` fails with
+`target not found` for every target, including the live node, because
+WirePlumber 0.5.12 `getDefaultNode` concatenates a nil `media.type`. Passing
+`stream-properties="props,media.type=Video,media.category=Capture"` to the
+consumer fixes the harness. This is a consumer/session-manager issue, not a
+publisher defect, and must be used in future A/B tests.
+
+**Parity notes.** The corrected producer properties match the live node,
+including `node.virtual="TRUE"` and `node.pause-on-idle="FALSE"`. The remaining
+differences are `media.name`, ids/serial, the test name/description and
+`node.loop.name` (`main-loop` vs `pipewire-main-l`). `node.loop.name` is an
+implementation detail; decide later whether to ignore it in the parity check or
+set it explicitly.
+
+**Caveats.** The spike fills synthetic frames with `write_bytes`, not decoded
+camera MJPEG; the CPU comparison is publication-only. The `SPA_META_Header`
+parameter was negotiated, but its fields were not populated in P0b. `EPIPE` and
+`EAGAIN` were not independently reproduced. The #5378 wedge was not reproduced;
+fallback 2a remains available if it appears during P4a.
+
+**Decision.** Proceed with the native publisher design (3 binaries / 2 runtime
+processes), with the buffer-flag correction and a P4a gate for watchdog/stream
+recreation. Keep the `gstreamer-rs` capture path and the C-patch fallback 2a
+until the native publisher passes G6 on real hardware.
 
 ---
 
@@ -486,7 +555,7 @@ supervisor/helper/installers in Rust.
 | Phase | Deliverable | Gate | Effort* |
 |---|---|---|---|
 | P0 | Oracle plus parity harness | G0 | 1–2 d |
-| P0b | Isolated `pipewire-rs` spike (after libclang) | 4.4 | 2–4 d |
+| P0b | Isolated `pipewire-rs` spike | 4.4 (7/8; #5378 gate at P4a) | 2–4 d |
 | P1 | `jieli-core`: state, framing, placeholder, JSON | G3 | 4–6 d |
 | P2 | Rust helper or decision C | G1 | 2–3 d |
 | P3 | Supervisor plus `gstreamer-rs` capture, Python publisher | G4–G5 | 4–6 d |
@@ -511,10 +580,10 @@ helper and sudoers rule do not change if the path/interface are preserved.
 
 | # | Decision | Recommendation | Blocks |
 |---|---|---|---|
-| 1 | Install `libclang-dev`/`clang` | yes | P0b |
+| 1 | `libclang` for `pipewire-sys` | resolved in P0b by local extraction; system install optional | — |
 | 2 | Helper: reproducible Rust (A) or Python (C) | A only if bit-identical; otherwise C | P2 |
 | 3 | GStreamer: keep in capture or remove | keep `gstreamer-rs` | P1/P3 |
-| 4 | Native publisher with watchdog or fallback 2a | try P0b; decide on data | P4a |
+| 4 | Native publisher with watchdog or fallback 2a | proceed with native publisher; keep 2a; watchdog gate at P4a | P4a |
 | 5 | Baseline: live (PT/fallback) or HEAD (EN/XDG) | live for visible behaviour; XDG after revalidation | G0 |
 | 6 | Installers: now or in P6 | in P6 | P6 |
 | 7 | Hardware windows (stop service, suspend/hibernate/unplug) | define who/when | G4–G8 |
@@ -527,12 +596,13 @@ helper and sudoers rule do not change if the path/interface are preserved.
 
 - Clean reboot (never tested by the current project).
 - Real remote call.
-- Native publisher: planes, pacing, meta, recovery by stream recreation.
+- Native publisher watchdog/recreation after a #5378 wedge (planes, pacing and
+  consumer allocation were verified in P0b; header fields were not populated).
+- `EPIPE`/`EAGAIN` independently reproduced (only `EBUSY` was observed in P0b).
 - Exact `gstreamer-rs` vs Python capture parity.
 - Whether any app depends on `media.name=python3.12` or
   `library.name=videoconvert/libspa-videoconvert` (incidental).
 - Suspend/hibernate on the current kernel with the Rust stack.
-- `pipewire-rs` 0.10.1 building with this machine's rustc/clang.
 - Exact `inhibit` signature in `zbus_systemd` (if zbus is chosen).
 - Whether the delay inhibitor is reusable after each sleep cycle.
 
@@ -556,7 +626,10 @@ helper and sudoers rule do not change if the path/interface are preserved.
 - pipewire-rs 0.10.1: `Stream::connect`, `dequeue_raw_buffer`,
   `queue_raw_buffer`, `update_params`, `trigger_process` (feature `v0_3_34`).
 - PipeWire 1.6.8 `src/pipewire/stream.c` — `EBUSY/EPIPE/EAGAIN`.
-- PipeWire `src/examples/video-src-sync.c` — `DRIVER | ALLOC_BUFFERS | MAP_BUFFERS`.
+- PipeWire `src/examples/video-src-sync.c` — `DRIVER | ALLOC_BUFFERS | MAP_BUFFERS`;
+  P0b showed this is not sufficient for planar, consumer-allocated buffers.
+- P0b spike (2026-10-19) — `pipewire` 0.10.1, `DRIVER | MAP_BUFFERS`,
+  consumer-allocated MemFd buffers, 3 I420 blocks, 1,000 create/destroy cycles.
 - pipewire-rs issues: #45 (errno), #99 (update_properties), #103/#109/#121
   (listeners/UAF), #19 (thread safety), #122 (rustc/clang build).
 - PipeWire issues: #5378 (provide-node wedge), #5412 (pipewiresink/Firefox),
@@ -579,9 +652,15 @@ helper and sudoers rule do not change if the path/interface are preserved.
 | 2026-10-19 | Repository baseline | 76 tests OK; 17 C scenarios OK; baseline fails as expected |
 | 2026-10-19 | Live deployment measured | 720p30, `jieli_720p30` node, V4L2 `/dev/video10`, active inhibitor |
 | 2026-10-19 | Repository↔live divergences | 10 items; baseline decision pending |
-| 2026-10-19 | Upstream research | native publisher does not remove the #5378 class; errno needs a raw seam; `trigger_process` feature-gated; libclang missing |
+| 2026-10-19 | Upstream research | native publisher does not remove the #5378 class; errno needs a raw seam; `trigger_process` feature-gated |
 | 2026-10-19 | This plan | created; no runtime change |
+| 2026-10-19 | P0b build | `pipewire` 0.10.1, local `libclang` extraction, existing sysroot; no system install |
+| 2026-10-19 | P0b buffer flags | `ALLOC_BUFFERS` yields empty blocks; consumer-allocated `DRIVER \| MAP_BUFFERS` works |
+| 2026-10-19 | P0b errno | raw dequeue exposes `EBUSY`; `EPIPE`/`EAGAIN` mapped but not reproduced |
+| 2026-10-19 | P0b stress | 1,000 create/destroy cycles clean; 30 fps; ~0.4% CPU in release |
+| 2026-10-19 | P0b wedge | #5378 not reproduced; reconnect recovered; watchdog/recreation is a P4a gate |
 
-**Next step:** authorise `libclang-dev`/`clang` and run Phase 0b (isolated spike
-in `/tmp/opencode`, no root, without stopping the service). Record the eight
-results in this file before any code enters the repository.
+**Next step:** confirm the baseline choice (§1.4/§7) and start P1
+(`jieli-core`: pure state, framing, placeholder, JSON), with the remaining P0b
+items (EPIPE/EAGAIN reproduction, meta header population, watchdog/recreation)
+folded into P4a. No runtime change until G8.
