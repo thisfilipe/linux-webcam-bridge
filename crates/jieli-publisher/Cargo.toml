@@ -1,0 +1,27 @@
+[package]
+name = "jieli-publisher"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Native PipeWire publisher for fixed-size I420 frames with an optional V4L2 loopback output"
+
+[features]
+default = []
+native = ["dep:pipewire", "dep:libspa-sys"]
+
+[dependencies]
+jieli-core = { path = "../jieli-core" }
+libc.workspace = true
+rustix.workspace = true
+pipewire = { version = "0.10.1", features = ["v0_3_50"], optional = true }
+libspa-sys = { version = "0.10.1", optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[[bin]]
+name = "jieli-publisher"
+path = "src/bin/jieli-publisher.rs"
+required-features = ["native"]

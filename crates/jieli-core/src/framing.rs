@@ -11,6 +11,7 @@ pub const FALLBACK_INTERVAL: Duration = Duration::from_nanos(33_333_333);
 /// The caller supplies time, so the state machine is deterministic and does
 /// not sleep or perform I/O. EOF discards any private partial bytes; they are
 /// never replayed as a real frame.
+#[derive(Debug)]
 pub struct FrameReader {
     pending: Vec<u8>,
     last_real: Option<Duration>,
@@ -92,6 +93,17 @@ impl FrameReader {
     pub fn has_real_frame(&self) -> bool {
         self.last_real.is_some()
     }
+
+    /// Next instant at which `tick` could emit a fallback.
+    ///
+    /// The caller can poll its input until this deadline; this mirrors the live
+    /// `select` timeout in `input_frames`.
+    pub fn next_deadline(&self) -> Duration {
+        match self.last_real {
+            None => self.next_fallback,
+            Some(last_real) => self.next_fallback.max(last_real + STARVATION),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -163,5 +175,20 @@ mod tests {
         assert_eq!(frames[0].as_bytes()[0], 1);
         assert_eq!(frames[1].as_bytes()[0], 2);
         assert_eq!(reader.pending_len(), 0);
+    }
+
+    #[test]
+    fn deadline_tracks_real_frames_and_fallbacks() {
+        let start = Duration::from_secs(10);
+        let mut reader = FrameReader::new(start);
+        assert_eq!(reader.next_deadline(), start);
+
+        let private = private_frame(1);
+        assert_eq!(reader.push(start, &private).len(), 1);
+        assert_eq!(reader.next_deadline(), start + STARVATION);
+
+        let due = start + STARVATION;
+        assert!(reader.tick(due).is_some());
+        assert_eq!(reader.next_deadline(), due + FALLBACK_INTERVAL);
     }
 }

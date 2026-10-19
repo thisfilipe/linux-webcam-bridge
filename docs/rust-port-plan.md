@@ -210,10 +210,11 @@ three planes with the correct offsets and strides.
 | ID | Contract | Value |
 |---|---|---|
 | D1 | Main node only | `node_name == jieli_720p30` |
-| D2 | Discovery | label `Jieli 720p30 V4L2`, under `/sys/devices/virtual/video4linux`; flag `$XDG_CONFIG_HOME/jieli-camera/disable-v4l2` |
+| D2 | Discovery | label `Jieli 720p30 V4L2` (plus the live `video10`/`Jieli` fallback), under `/sys/devices/virtual/video4linux`; disable flag `$HOME/.config/jieli-camera/disable-v4l2` (live behavior; `XDG_CONFIG_HOME` is not used) |
 | D3 | I/O | mmap, YU12 1280x720 30 fps, `exclusive_caps=1` (rw does not work in GStreamer 1.24.2) |
 | D4 | Device change | rebuild; never unload the module |
 | D5 | Isolation | a V4L2 failure does not affect PipeWire |
+| D6 | Status | discovery implemented and tested; the mmap writer is P4b; a V4L2 failure must never stop PipeWire |
 
 ### E. Root helper
 
@@ -269,7 +270,7 @@ talks to directly.
 |---|---|---|---|---|
 | Capture | `gstreamer-rs` vs raw V4L2 + Rust decode | **`gstreamer-rs` first**; raw V4L2 only as an optional phase | The current pipeline already absorbs the device quirk; the bug is firmware/USB-level | Raw V4L2 reimplements colour, subsampling and incomplete-JPEG handling |
 | Publication | `gstreamer-rs` + patch vs `pipewire-rs` | **`pipewire-rs`**, after Phase 0, with a watchdog | Removes the patch, `build-plugin.py`, the 1.6.8 gate and the private registry | I420 planes, pacing, binding soundness, #5378 wedge |
-| Loopback | `v4l2sink` vs V4L2 output API | **`v4` directly** if the publisher is native | Removes GStreamer from the publisher; mmap YU12 is direct | `v4` has been stalled since 2023 |
+| Loopback | `v4l2sink` vs V4L2 output API | **`v4l` directly** if the publisher is native | Removes GStreamer from the publisher; mmap YU12 is direct | `v4l` has been stalled since 2023 |
 | Processes | 2 vs 1 | **keep 2** | Crash isolation, independent restart, `publisher_sessions` contract | One 1.38 MB/frame copy (~41 MB/s) |
 | Helper | raw ioctl vs `rusb`/`nusb` | **raw ioctl** (`rustix`/`libc`) | Preserves fd-based verification (major/minor/descriptor on the same fd) | None; it is the most isolatable component |
 | State | GLib callbacks vs pure state machine | **pure state machine** | Deterministic tests; stronger than thread mocks | None |
@@ -316,7 +317,7 @@ tests/                           # integration + parity harness
 |---|---|---|
 | `pipewire` / `libspa` | 0.10.1 | native publisher; features `v0_3_50` |
 | `gstreamer` / `gstreamer-app` | 0.25.4 / 0.25.2 | capture; Rust ≥1.92 |
-| `v4` | 0.14.0 | V4L2 output (stalled; see risks) |
+| `v4l` | 0.14.0 | V4L2 output (stalled; see risks) |
 | `zbus` | 5.19 (if used) | alternative logind; **not** zbus 6 |
 | `rustix` / `libc` | 1.1.5 / — | helper |
 | `signal-hook` | 0.4.5 | signals |
@@ -557,7 +558,7 @@ until the native publisher passes G6 on real hardware.
 | 6 | Wrong I420 planes/meta | medium/high | spike plus `pw-dump` plus GStreamer consumer |
 | 7 | Capture regression | medium/high | identical pipeline; test source first; A/B |
 | 8 | Installer refuses the live deployment | high/medium | `--replace` plus legacy-config compatibility |
-| 9 | `v4` stalled | medium/medium | small surface; raw-ioctl fallback |
+| 9 | `v4l` stalled | medium/medium | small surface; raw-ioctl fallback |
 | 10 | JSON/placeholder divergence | low/low | golden fixtures; tolerance only on floats |
 | 11 | Two captures at once | medium/medium | Python service stopped during hardware tests |
 | 12 | CPU/thermal over budget | medium/medium | measure; ≤ +10% CPU, ≥ −2 fps |
@@ -654,7 +655,7 @@ helper and sudoers rule do not change if the path/interface are preserved.
   `InhibitDelayMaxSec` default 5 s.
 - `v4l2loopback` README — `exclusive_caps` for Chrome/WebRTC.
 - `turbojpeg::decompress_to_yuv` — the only documented native YUV420 path.
-- `v4` 0.14.0 (2023; last push 2024) — `Type::VideoOutput`/mmap.
+- `v4l` 0.14.0 (2023; last push 2024) — `Type::VideoOutput`/mmap.
 - `cargo-deb` 3.8.0 — system units; a user unit is installed per user.
 
 ---
@@ -677,8 +678,9 @@ helper and sudoers rule do not change if the path/interface are preserved.
 | 2026-10-19 | Helper decision | **Rust only**, no Python; reproducible build + SHA-256 manifest |
 | 2026-10-19 | P1 core foundation | workspace plus `jieli-core`: 36 tests covering frame ownership, PT placeholder hash, framing, report and the state machine |
 | 2026-10-19 | P2 helper | `jieli-usb` / `jieli-usb-reset` parity implementation with 24 unit + 2 CLI tests; installer and reproducible build still pending |
+| 2026-10-19 | P4a PipeWire publisher | `jieli-publisher` native PipeWire + stdin framing/placeholder + CLI/PID/signals + V4L2 discovery; smoke 118 frames in ~4 s; live service unaffected; V4L2 writer pending |
 
-**Next step:** start P3 (supervisor plus GStreamer capture) or finish the P2
-packaging path (reproducible helper build plus installer manifest). The remaining
-P0b items (EPIPE/EAGAIN reproduction, meta header population,
-watchdog/recreation) are folded into P4a. No runtime change until G8.
+**Next step:** implement the native V4L2 loopback writer (P4b) against a safe
+test node, then P3 (supervisor plus GStreamer capture). The remaining P0b items
+(EPIPE/EAGAIN reproduction, meta header population, watchdog/recreation) are
+folded into P4a. No runtime change until G8.
