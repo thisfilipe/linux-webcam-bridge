@@ -524,6 +524,11 @@ parameter was negotiated, but its fields were not populated in P0b. `EPIPE` and
 `EAGAIN` were not independently reproduced. The #5378 wedge was not reproduced;
 fallback 2a remains available if it appears during P4a.
 
+**Live-service check.** After the spike, the service remained active/running,
+`Result=success`, `NRestarts=0`; the state file reported `recovery=streaming`,
+`error=null`, and frames advanced by ~119 in 4 s. No spike node or consumer
+process remained.
+
 **Decision.** Proceed with the native publisher design (3 binaries / 2 runtime
 processes), with the buffer-flag correction and a P4a gate for watchdog/stream
 recreation. Keep the `gstreamer-rs` capture path and the C-patch fallback 2a
