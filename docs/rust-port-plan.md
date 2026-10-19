@@ -316,7 +316,7 @@ tests/                           # integration + parity harness
 | Crate | Version | Use |
 |---|---|---|
 | `pipewire` / `libspa` | 0.10.1 | native publisher; features `v0_3_50` |
-| `gstreamer` / `gstreamer-app` | 0.25.4 / 0.25.2 | capture; Rust ≥1.92 |
+| `gstreamer` / `gstreamer-app` | 0.24.5 | capture; matches the deployed GStreamer 1.24.2 (0.25.x needs newer headers) |
 | `v4l` | 0.14.0 | V4L2 output (stalled; see risks) |
 | `zbus` | 5.19 (if used) | alternative logind; **not** zbus 6 |
 | `rustix` / `libc` | 1.1.5 / — | helper |
@@ -679,8 +679,9 @@ helper and sudoers rule do not change if the path/interface are preserved.
 | 2026-10-19 | P1 core foundation | workspace plus `jieli-core`: 36 tests covering frame ownership, PT placeholder hash, framing, report and the state machine |
 | 2026-10-19 | P2 helper | `jieli-usb` / `jieli-usb-reset` parity implementation with 24 unit + 2 CLI tests; installer and reproducible build still pending |
 | 2026-10-19 | P4a PipeWire publisher | `jieli-publisher` native PipeWire + stdin framing/placeholder + CLI/PID/signals + V4L2 discovery; smoke 118 frames in ~4 s; live service unaffected; V4L2 writer pending |
+| 2026-10-19 | P3 test-source supervisor | `jieli-bridge --test-source`: `gstreamer-rs` 0.24.5 (GStreamer 1.24.2) `videotestsrc -> appsink -> publisher stdin`; state/report E2E 300 frames/10 s at 29.98 fps; consumer received 119 frames/4 s; real V4L2 capture, logind/sleep and helper reset still pending |
 
-**Next step:** implement the native V4L2 loopback writer (P4b) against a safe
-test node, then P3 (supervisor plus GStreamer capture). The remaining P0b items
-(EPIPE/EAGAIN reproduction, meta header population, watchdog/recreation) are
-folded into P4a. No runtime change until G8.
+**Next step:** finish P3 with real V4L2 capture, logind sleep handling and
+helper reset, then P4b (native V4L2 writer), then installers/manifest. The
+remaining P0b items (EPIPE/EAGAIN reproduction, meta header population,
+watchdog/recreation) are folded into P4a. No runtime change until G8.

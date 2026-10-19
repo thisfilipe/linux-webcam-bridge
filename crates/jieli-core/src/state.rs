@@ -333,6 +333,11 @@ impl BridgeState {
         self.capture_started(generation, now, Err(reason.to_string()))
     }
 
+    /// A running capture emitted an error/EOS; stop it and enter recovery.
+    pub fn capture_error(&mut self, now: f64, reason: &str) -> Vec<Action> {
+        self.recover(now, reason, false)
+    }
+
     pub fn capture_closed(&mut self, result: Result<(), String>) -> Vec<Action> {
         self.capture_closing = false;
         let mut actions = Vec::new();
@@ -611,6 +616,19 @@ mod tests {
             FrameOutcome::Accepted { displaced: None }
         ));
         (state, generation)
+    }
+
+    #[test]
+    fn capture_error_enters_backoff_and_stops_capture() {
+        let (mut state, _) = active();
+        let actions = state.capture_error(100.5, "capture: boom");
+        assert!(
+            actions
+                .iter()
+                .any(|action| matches!(action, Action::StopCapture))
+        );
+        assert_eq!(state.recovery, Recovery::Backoff);
+        assert_eq!(state.error.as_deref(), Some("capture: boom"));
     }
 
     #[test]

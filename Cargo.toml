@@ -1,6 +1,11 @@
 [workspace]
 resolver = "3"
-members = ["crates/jieli-core", "crates/jieli-usb", "crates/jieli-publisher"]
+members = [
+    "crates/jieli-core",
+    "crates/jieli-usb",
+    "crates/jieli-publisher",
+    "crates/jieli-bridge",
+]
 
 [workspace.package]
 edition = "2024"
