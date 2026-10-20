@@ -49,6 +49,10 @@ sudo apt install --no-install-recommends \
   libglib2.0-dev v4l-utils
 ```
 
+Rust `1.99.0` (with `cargo`) is required for the runtime and the reproducible
+helper; install it with `rustup` if the distribution package is older. The
+native build also needs the PipeWire/GStreamer development packages above.
+
 The project does not replace the PipeWire daemon, system GStreamer libraries,
 UVC driver, boot arguments, GPU configuration or hibernation configuration.
 
@@ -62,19 +66,23 @@ cd linux-webcam-bridge
 Read [security.md](security.md) and the installer scripts before executing
 privileged steps. No one-line download-and-run installer is provided.
 
-## 2. Build the isolated plugin and Rust helper
+## 2. Build the isolated plugin and Rust binaries
 
 ```sh
 python3 tools/build-plugin.py
 python3 tests/check_pool.py
 python3 -m unittest discover -s tests -p 'test_*.py'
+cargo build --release -p jieli-bridge -p jieli-publisher \
+  --features jieli-bridge/native,jieli-publisher/native
 tools/build-helper.sh build
 ```
 
 `tools/build-helper.sh` requires the pinned Rust toolchain `1.99.0`; it builds
 the helper twice, verifies byte-identical output, and writes
 `dist/jieli-usb-reset` plus its SHA-256 manifest. The USB installer refuses a
-missing or changed artifact.
+missing or changed artifact. The native publisher also needs the local
+`~/.local/lib/jieli-gstreamer/libgstpipewire.so` override built below; it
+falls back to the distribution plugin without it.
 
 The builder downloads the official PipeWire 1.6.8 archive, checks SHA-256,
 extracts into `build/plugin/`, applies the patch, compiles only the GStreamer
@@ -99,24 +107,35 @@ version 1.6.8. Do not set these variables globally in your login environment.
 
 ## 3. Install the user files
 
-First preview the exact destinations:
+Stop the service before replacing files; this ends physical capture and may
+require a reconnect on the affected device. Review and archive any existing
+destinations first. The installed unit uses `%h`, so it does not depend on your
+checkout directory or account name. Runtime status uses `$XDG_RUNTIME_DIR`;
+caches and flags follow `XDG_CACHE_HOME` / `XDG_CONFIG_HOME`.
 
 ```sh
-python3 tools/setup-user.py
-python3 tools/setup-user.py --install
+systemctl --user stop jieli-camera-bridge.service
+
+install -Dm755 target/release/jieli-bridge ~/.local/libexec/jieli-bridge
+install -Dm755 target/release/jieli-publisher ~/.local/libexec/jieli-publisher
+install -Dm644 config/jieli-camera-bridge.rust.service \
+  ~/.config/systemd/user/jieli-camera-bridge.service
+install -Dm644 config/90-jieli-bridge.conf \
+  ~/.config/wireplumber/wireplumber.conf.d/90-jieli-bridge.conf
+install -Dm755 build/plugin/libgstpipewire.so \
+  ~/.local/lib/jieli-gstreamer/libgstpipewire.so
 ```
 
-This copies the two Python programs, user service, WirePlumber rules and
-built plugin. It does **not** start or stop services. It writes an installation
-manifest and archives previous copies in
-`${XDG_STATE_HOME:-$HOME/.local/state}/jieli-camera/backups/`.
-Differing existing files require explicit `--replace` after review. A running
-bridge must be stopped before replacement; this ends physical capture and
-may require a reconnect on the affected device.
+This installs the Rust supervisor and publisher, the Rust unit, the
+WirePlumber camera-filter rule and the locally built PipeWire plugin. It does
+not start the service. The legacy `tools/setup-user.py` installs the retained
+Python rollback files, not the Rust runtime; do not run it for a new Rust
+installation. If replacing an existing Rust installation, keep a private copy
+of any files you customized.
 
-The service uses `%h`, so it does not depend on your checkout directory or
-account name. Runtime status uses `$XDG_RUNTIME_DIR`; caches and flags follow
-`XDG_CACHE_HOME` / `XDG_CONFIG_HOME`.
+The publisher prefers `~/.local/lib/jieli-gstreamer/libgstpipewire.so`; this is
+the patched plugin that releases stale buffer slots after an unclean consumer.
+Do not remove it while the Rust service is installed.
 
 ## 4. Enable automatic USB recovery
 

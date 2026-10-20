@@ -56,12 +56,18 @@ briefly interrupts the webcam's composite microphone too.
 
 ## Rust cutover status
 
-The `rust-port` branch has cut over the installed service to the Rust
-supervisor and publisher. The Python programs and the previous unit are kept
-as rollback until the user-facing Firefox, suspend, hibernate and reboot checks
-pass. See [Rust cutover](docs/rust-cutover.md) for the installed layout,
-validation scope and rollback. `main` remains the Python baseline until that
-review is complete.
+`main` now contains the Rust supervisor, publisher and privileged reset helper.
+The reference installation was cut over from Python and validated with capture,
+PipeWire/V4L2 consumers, Snapshot, Edge/Meet WebRTC, suspend, hibernate, a real
+USB reset and a clean reboot. The Python programs, the previous unit and the
+previous helper are retained as rollback; they are not started by the installed
+Rust unit. See [Rust cutover](docs/rust-cutover.md) for the installed layout,
+validation scope and rollback.
+
+The portable user-file and V4L2 installers are still the legacy Python tools;
+the Rust helper now has a reproducible artifact and manifest, and the runtime
+does not depend on Python. P6 packaging cleanup remains tracked in the
+[Rust port plan](docs/rust-port-plan.md).
 
 ## Start here
 
@@ -83,11 +89,13 @@ installer for every Linux distribution.
 | Continuous 720p30 image | Passed for several minutes |
 | Snapshot 51 Flatpak: reopen and switch cameras | Passed |
 | Direct V4L2: three reopen cycles | 30.10 / 30.00 / 29.78 FPS |
-| Firefox: two real WebRTC capture sessions | 1280×720, negotiated 30 FPS; presented 28.50 / 28.75 FPS headless |
+| Firefox: two real WebRTC capture sessions (baseline) | 1280×720, negotiated 30 FPS; presented 28.50 / 28.75 FPS headless |
 | Physical unplug/replug | Automatic recovery passed |
-| Suspend/resume | Passed with the app open |
-| Hibernate/resume | Passed with automatic recovery |
-| Clean reboot | **Not tested** |
+| Suspend/resume | Passed twice on Rust, including with Snapshot active |
+| Hibernate/resume | Passed twice on Rust, including with Snapshot active |
+| Clean reboot | Passed on Rust; service auto-started and capture returned |
+| Real Rust-helper reset | Passed through the bridge's `/usr/bin/sudo -n` path |
+| Firefox-specific check on Rust | Blocked by a local Firefox renderer crash; Edge/Meet validated WebRTC |
 | Remote video call / other webcam models | **Not tested** |
 
 These hardware results were collected from the working deployment from which
@@ -98,10 +106,11 @@ it has not been reinstalled over that deployment. See [full validation scope](do
 
 | Path | Purpose |
 | --- | --- |
-| `src/` | Capture bridge, persistent publisher, restricted USB helper |
+| `crates/` | Rust supervisor, core state machine, publisher and privileged reset helper |
+| `src/` | Legacy Python baseline retained for rollback/oracle |
 | `patches/` | Patch against upstream PipeWire 1.6.8 |
-| `tools/` | Reproducible build, explicit installers, opt-in consumer checks |
-| `config/` | User service and WirePlumber rules |
+| `tools/` | Reproducible builds, explicit installers, opt-in consumer checks |
+| `config/` | Rust/Python user units, WirePlumber rules and sleep hook |
 | `tests/` | Mocked lifecycle, permission and installer checks; deterministic C regression |
 | `docs/` | Installation, diagnosis, security, validation, rollback |
 

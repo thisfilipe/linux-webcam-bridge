@@ -1,9 +1,10 @@
 # Rust cutover
 
-The `rust-port` branch contains the native replacement for the Python bridge.
-The cutover was performed after the capture, reset and publication gates
-passed on the reference hardware. `main` remains Python until the change is
-merged.
+`main` contains the native replacement for the Python bridge. The cutover was
+performed after the capture, reset and publication gates passed on the
+reference hardware; the Rust branch was then merged locally without a remote
+push. The Python programs, unit and helper remain available as a rollback
+path, but the installed service runs Rust.
 
 ## Installed layout
 
@@ -12,7 +13,11 @@ merged.
 ~/.local/libexec/jieli-publisher       # Rust GStreamer publisher + native V4L2 writer
 ~/.local/libexec/jieli-camera-bridge.py         # retained Python rollback copy
 ~/.local/libexec/jieli-pipewire-publisher.py    # retained Python rollback copy
+~/.local/lib/jieli-gstreamer/libgstpipewire.so  # retained patched plugin
 ~/.config/systemd/user/jieli-camera-bridge.service
+/usr/local/libexec/jieli-usb-reset              # Rust root helper
+/usr/local/libexec/jieli-usb-reset.sha256       # installed hash manifest
+/usr/lib/systemd/system-sleep/50-jieli-usb-resume
 ```
 
 The unit in `config/jieli-camera-bridge.rust.service` is the installed unit. It

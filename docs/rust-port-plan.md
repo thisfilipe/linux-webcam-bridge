@@ -589,9 +589,10 @@ until the native publisher passes G6 on real hardware.
 
 \* rough estimate, not a commitment.
 
-**Branch:** `rust-port`; `main` untouched until G8. First commit:
-`parity/live-<date>/` with artefacts and hashes. Small per-phase PRs. Cutover in
-a single PR, tag `v2.0.0-rust`, keep tag `v1.x`.
+**Branch:** the Rust history was merged into local `main` without a remote
+push. The Python baseline remains in `src/` as rollback/oracle. The release
+tag is not created yet; create it only after the P6 installers pass their
+checks.
 
 **Cutover rollback:** dated tar of the five user files plus unit and plugin; stop
 the service; restore; `daemon-reload`; start; validate 720p30 and the node. The
@@ -694,12 +695,16 @@ helper and sudoers rule do not change if the path/interface are preserved.
 | 2026-10-19 | P4a timestamp fix | `SPA_META_Header` now carries advancing PTS/sequence; consumer PTS advances by 33.333 ms per frame, fixing the frozen/still-frame display in Snapshot while frame counters were already advancing |
 | 2026-10-20 | Publisher fallback | native `pipewire-rs` publisher regressed Snapshot after minimise/unfocus (stale consumer buffers); switched to the planned fallback 2a: `gstreamer-rs` `appsrc → pipewiresink` with the validated Python contract and local patched PipeWire plugin. Idle/resume 30.1/31.0 fps; 3×120 V4L2 29.91 fps; Snapshot minimise, switch, close/reopen passed |
 | 2026-10-20 | Suspend/resume failure | real resume logged `xhci_hcd 0000:06:00.4: HC died; cleaning up` and `failed to resume async: -110`; the USB camera disappeared and only a reboot restored it. Bridge now treats helper `found 0` as a retryable missing device instead of `exhausted`; added prepare/resume/teardown logging and a scoped xHCI resume-rebind hook. Hook installed in `/usr/lib/systemd/system-sleep`; suspend retested twice and hibernate twice successfully, including Snapshot active; hook ran automatically and the camera re-enumerated without requiring its rebind path |
+| 2026-10-20 | Rust helper installed | reproducible `jieli-usb-reset` hash `8b82d909...` installed with the unchanged sudoers path; Python helper backed up; real reset through `/usr/bin/sudo -n` reenumerated `008/008` and the bridge returned to streaming |
+| 2026-10-20 | Rust merge | `rust-port` merged into local `main` without a remote push; Python, patched plugin and resume hook retained; P6 user/V4L2 installer cleanup remains |
 
-**Next step:** the privileged Rust-helper swap, then P6 cleanup/merge. Suspend
-and hibernate both passed twice, including with Snapshot active; the clean
-reboot passed; Edge/Meet demonstrated real WebRTC video with camera switching
-and close/reopen. Manual Firefox/WebRTC remains blocked by a local Firefox
-crash. The xHCI hook is installed in `/usr/lib/systemd/system-sleep` and ran
-automatically during hibernate; its rebind path remains the fallback. The
-installed service is Rust on `rust-port`; `main` remains Python until
-reviewed/merged.
+**Next step:** P6 packaging cleanup. The Rust stack is merged into `main`
+locally (no remote push), the privileged helper is the reproducible Rust
+binary and a real reset passed, and suspend/hibernate/reboot checks all passed.
+The USB installer consumes the Rust artifact; the user-file and V4L2 installers
+still need Rust/current-layout integration, and the Python rollback files are
+intentionally retained for now. Manual Firefox/WebRTC remains blocked by a
+local Firefox crash; Edge/Meet demonstrated real WebRTC video with camera
+switching and close/reopen. The xHCI hook is installed in
+`/usr/lib/systemd/system-sleep` and ran automatically during hibernate; its
+rebind path remains the fallback.

@@ -4,6 +4,26 @@ Close camera clients first. Stopping capture may leave this camera requiring
 a reconnect before another raw stream. Restarting WirePlumber can briefly
 interrupt audio/video policy. Run user commands as your desktop user.
 
+## Rust installation
+
+The Rust runtime is installed manually as `jieli-bridge`, `jieli-publisher`,
+the Rust user unit, the WirePlumber rule and the private GStreamer plugin.
+Archive any files you customized, then stop and disable the service before
+reviewing removals:
+
+```sh
+systemctl --user disable --now jieli-camera-bridge.service
+```
+
+Remove only the files you recognize as this installation. Keep
+`~/.local/lib/jieli-gstreamer/libgstpipewire.so` if another local build uses
+it, and keep the Python files if you still want the rollback path.
+
+## Legacy Python installation
+
+The following removal procedure applies to the retained Python baseline, not
+to the Rust runtime.
+
 ## 1. Stop the bridge and remove its user files
 
 ```sh
