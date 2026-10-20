@@ -35,6 +35,8 @@ fn main() {
         }
     };
 
+    // Must run before the reader/V4L2 threads and GStreamer initialization.
+    jieli_publisher::gst_publisher::prefer_local_pipewire_plugin();
     set_pipe_size();
     let pid_file = pid_file_path(&arguments.node_name);
     if let Some(parent) = pid_file.parent() {
@@ -59,7 +61,7 @@ fn main() {
         std::thread::spawn(move || feed_stdin(feed, &QUIT));
     }
 
-    let result = jieli_publisher::native::run(jieli_publisher::native::NativeOptions {
+    let result = jieli_publisher::gst_publisher::run(jieli_publisher::native::NativeOptions {
         node_name: &arguments.node_name,
         description: &arguments.description,
         feed,

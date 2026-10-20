@@ -601,7 +601,7 @@ helper and sudoers rule do not change if the path/interface are preserved.
 | 1 | `libclang` for `pipewire-sys` | resolved in P0b by local extraction; system install optional | — |
 | 2 | Helper implementation | **Rust only** (A); reproducible build plus SHA-256; no Python fallback | P2 |
 | 3 | GStreamer: keep in capture or remove | keep `gstreamer-rs` | P1/P3 |
-| 4 | Native publisher with watchdog or fallback 2a | proceed with native publisher; keep 2a; watchdog gate at P4a | P4a |
+| 4 | Native publisher with watchdog or fallback 2a | **resolved: fallback 2a** — native publisher failed the Snapshot focus/consumer gate; installed publisher is `gstreamer-rs` with the validated `pipewiresink` contract | — |
 | 5 | Baseline: live (PT/fallback) or HEAD (EN/XDG) | **live** for visible behaviour; XDG only after a separate revalidation | G0 |
 | 6 | Installers: now or in P6 | in P6 | P6 |
 | 7 | Hardware windows (stop service, suspend/hibernate/unplug) | define who/when | G4–G8 |
@@ -614,8 +614,8 @@ helper and sudoers rule do not change if the path/interface are preserved.
 
 - Clean reboot (never tested by the current project).
 - Real remote call.
-- Native publisher watchdog/recreation after a #5378 wedge (planes, pacing and
-  consumer allocation were verified in P0b; header fields were not populated).
+- Native publisher watchdog/recreation after a #5378 wedge; the native
+  publisher is not the installed path (fallback 2a is).
 - `EPIPE`/`EAGAIN` independently reproduced (only `EBUSY` was observed in P0b).
 - Exact `gstreamer-rs` vs Python capture parity.
 - Whether any app depends on `media.name=python3.12` or
@@ -689,9 +689,11 @@ helper and sudoers rule do not change if the path/interface are preserved.
 | 2026-10-19 | P5 pre-cutover stack | live stopped; Rust real capture → native publisher; PipeWire consumer streamed for 5 s; V4L2 reader captured 30 frames at 29.92 fps; watchdog reset recovered at reenumeration `008/013`; live restored and streaming at ~29.5 fps; 3×120/Firefox, Rust-helper hardware and real suspend gates remain |
 | 2026-10-19 | G8 cutover | release binaries and Rust unit installed; Python programs/unit retained as rollback; systemd restart, reset recovery, 3×120 V4L2 at ~29.9 fps, 30.0 fps PipeWire consumer and 60 s stability passed; `NRestarts=0`, no test leftovers; Firefox headless crashes in this session, so manual Firefox and suspend/hibernate/reboot gates remain |
 | 2026-10-19 | P4a timestamp fix | `SPA_META_Header` now carries advancing PTS/sequence; consumer PTS advances by 33.333 ms per frame, fixing the frozen/still-frame display in Snapshot while frame counters were already advancing |
+| 2026-10-20 | Publisher fallback | native `pipewire-rs` publisher regressed Snapshot after minimise/unfocus (stale consumer buffers); switched to the planned fallback 2a: `gstreamer-rs` `appsrc → pipewiresink` with the validated Python contract and local patched PipeWire plugin. Idle/resume 30.1/31.0 fps; 3×120 V4L2 29.91 fps; Snapshot minimise, switch, close/reopen passed |
 
-**Next step:** user-facing validation (Snapshot/Firefox, suspend, hibernate,
-clean reboot), then the privileged Rust-helper swap and P6 cleanup. The
-installed service is Rust on `rust-port`; `main` remains Python until the
-change is reviewed and merged. Firefox headless must not be used in this
-session (renderer crash).
+**Next step:** remaining user-facing validation (manual Firefox/WebRTC,
+suspend, hibernate, clean reboot), then the privileged Rust-helper swap and P6
+cleanup/merge. Snapshot minimise/refocus, camera switching and close/reopen now
+pass with the GStreamer publisher. The installed service is Rust on `rust-port`;
+`main` remains Python until the change is reviewed and merged. Firefox headless
+must not be used in this session (renderer crash).

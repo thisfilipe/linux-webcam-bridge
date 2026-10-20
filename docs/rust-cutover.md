@@ -9,7 +9,7 @@ merged.
 
 ```text
 ~/.local/libexec/jieli-bridge          # Rust supervisor
-~/.local/libexec/jieli-publisher       # Rust PipeWire + V4L2 publisher
+~/.local/libexec/jieli-publisher       # Rust GStreamer publisher + native V4L2 writer
 ~/.local/libexec/jieli-camera-bridge.py         # retained Python rollback copy
 ~/.local/libexec/jieli-pipewire-publisher.py    # retained Python rollback copy
 ~/.config/systemd/user/jieli-camera-bridge.service
@@ -57,6 +57,32 @@ may need the existing 12 s watchdog reset before frames flow.
   the retained-buffer ownership check passed.
 - `NRestarts=0`, state `recovery=streaming`, publisher and capture sessions
   stable, and no test node or process left behind.
+
+## Publisher regression fix (2026-10-20)
+
+The initial native `pipewire-rs` publisher passed the synthetic gates but
+regressed Snapshot after minimising/unfocusing the window: the consumer stopped
+draining buffers and playback fell to a few frames until the camera was
+reselected. The native publisher was not shipped as the final publication path.
+
+The installed publisher now uses `gstreamer-rs` with the same contract as the
+validated Python publisher: live `appsrc` (`do-timestamp=true`), leaky queue and
+`pipewiresink mode=provide use-bufferpool=false sync=false async=false`. When
+`~/.local/lib/jieli-gstreamer/libgstpipewire.so` exists, the publisher prepends
+that directory to `GST_PLUGIN_PATH` before starting threads/GStreamer; this is
+the patched plugin that releases stale busy buffer slots after an unclean
+consumer. Without the local plugin, GStreamer falls back to the system plugin.
+
+Post-fix checks on 2026-10-20:
+
+- consumer idle for 10 s with the pipeline still PLAYING: 30.1 fps before,
+  31.0 fps after resume;
+- three PipeWire consumer rounds: 30.11, 30.09 and 31.01 fps, with the retained
+  buffer unchanged;
+- three direct V4L2 sessions of 120 frames: 29.91 fps each;
+- user validation in Snapshot: minimise/restore, switch camera and return,
+  close/reopen all preserve continuous playback;
+- service `recovery=streaming`, about 29.9 fps, `NRestarts=0`.
 
 The headless Firefox check is not usable in this reference session: Firefox
 crashes in its software renderer before returning metadata. Test Firefox

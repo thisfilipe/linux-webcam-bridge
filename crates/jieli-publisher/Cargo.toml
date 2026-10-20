@@ -5,16 +5,24 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "Native PipeWire publisher for fixed-size I420 frames with an optional V4L2 loopback output"
+description = "GStreamer/PipeWire publisher for fixed-size I420 frames with an optional V4L2 loopback output"
 
 [features]
 default = []
-native = ["dep:pipewire", "dep:libspa-sys", "dep:v4l"]
+native = [
+    "dep:gstreamer",
+    "dep:gstreamer-app",
+    "dep:pipewire",
+    "dep:libspa-sys",
+    "dep:v4l",
+]
 
 [dependencies]
 jieli-core = { path = "../jieli-core" }
 libc.workspace = true
 rustix.workspace = true
+gstreamer = { version = "0.24.5", optional = true }
+gstreamer-app = { version = "0.24.5", optional = true }
 pipewire = { version = "0.10.1", features = ["v0_3_50"], optional = true }
 libspa-sys = { version = "0.10.1", optional = true }
 v4l = { version = "0.14.0", optional = true }
