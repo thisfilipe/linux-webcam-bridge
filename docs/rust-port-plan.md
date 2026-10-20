@@ -690,12 +690,13 @@ helper and sudoers rule do not change if the path/interface are preserved.
 | 2026-10-19 | G8 cutover | release binaries and Rust unit installed; Python programs/unit retained as rollback; systemd restart, reset recovery, 3×120 V4L2 at ~29.9 fps, 30.0 fps PipeWire consumer and 60 s stability passed; `NRestarts=0`, no test leftovers; Firefox headless crashes in this session, so manual Firefox and suspend/hibernate/reboot gates remain |
 | 2026-10-19 | P4a timestamp fix | `SPA_META_Header` now carries advancing PTS/sequence; consumer PTS advances by 33.333 ms per frame, fixing the frozen/still-frame display in Snapshot while frame counters were already advancing |
 | 2026-10-20 | Publisher fallback | native `pipewire-rs` publisher regressed Snapshot after minimise/unfocus (stale consumer buffers); switched to the planned fallback 2a: `gstreamer-rs` `appsrc → pipewiresink` with the validated Python contract and local patched PipeWire plugin. Idle/resume 30.1/31.0 fps; 3×120 V4L2 29.91 fps; Snapshot minimise, switch, close/reopen passed |
-| 2026-10-20 | Suspend/resume failure | real resume logged `xhci_hcd 0000:06:00.4: HC died; cleaning up` and `failed to resume async: -110`; the USB camera disappeared and only a reboot restored it. Bridge now treats helper `found 0` as a retryable missing device instead of `exhausted`; added prepare/resume/teardown logging and a scoped xHCI resume-rebind hook. Hook installed in `/usr/lib/systemd/system-sleep`; suspend retested twice successfully (including Snapshot active), hibernate pending; hook rebind path not yet exercised |
+| 2026-10-20 | Suspend/resume failure | real resume logged `xhci_hcd 0000:06:00.4: HC died; cleaning up` and `failed to resume async: -110`; the USB camera disappeared and only a reboot restored it. Bridge now treats helper `found 0` as a retryable missing device instead of `exhausted`; added prepare/resume/teardown logging and a scoped xHCI resume-rebind hook. Hook installed in `/usr/lib/systemd/system-sleep`; suspend retested twice and hibernate twice successfully, including Snapshot active; hook ran automatically and the camera re-enumerated without requiring its rebind path |
 
-**Next step:** test hibernate (suspend passed twice), then the privileged
-Rust-helper swap and P6 cleanup/merge. Manual Firefox/WebRTC is blocked by a
-local Firefox crash; Edge/Meet demonstrated real WebRTC video with camera
-switching and close/reopen. Clean reboot passed. The xHCI hook is installed in
-`/usr/lib/systemd/system-sleep`; its no-op path was verified manually and its
-rebind path remains the fallback. The installed service is Rust on `rust-port`;
-`main` remains Python until reviewed/merged.
+**Next step:** the privileged Rust-helper swap, then P6 cleanup/merge. Suspend
+and hibernate both passed twice, including with Snapshot active; the clean
+reboot passed; Edge/Meet demonstrated real WebRTC video with camera switching
+and close/reopen. Manual Firefox/WebRTC remains blocked by a local Firefox
+crash. The xHCI hook is installed in `/usr/lib/systemd/system-sleep` and ran
+automatically during hibernate; its rebind path remains the fallback. The
+installed service is Rust on `rust-port`; `main` remains Python until
+reviewed/merged.

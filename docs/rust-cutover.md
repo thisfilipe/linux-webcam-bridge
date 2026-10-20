@@ -109,8 +109,11 @@ not read `/etc/systemd/system-sleep`. Its no-op path was verified manually
 itself has not yet been exercised by a controller failure.
 
 Suspend/resume was tested twice after the bridge fix, including with Snapshot
-active; the camera and playback recovered without a reboot. Hibernate remains
-untested. Reboot remains the fallback if the controller still does not return.
+active; the camera and playback recovered without a reboot. Hibernate was then
+tested twice, also with Snapshot active during the second cycle; the hook ran
+automatically, the Jieli camera re-enumerated (`1224:2a25`), and the bridge
+reopened capture. Reboot remains the fallback if the controller still does not
+return.
 
 The headless Firefox check is not usable in this reference session: Firefox
 crashes in its software renderer before returning metadata. Edge/Meet WebRTC
