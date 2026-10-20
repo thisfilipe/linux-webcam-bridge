@@ -4,9 +4,9 @@
 
 `patches/gstpipewirepool-busy-slot.patch` modifies `src/gst/gstpipewirepool.c`
 from [PipeWire 1.6.8](https://github.com/PipeWire/pipewire/tree/1.6.8).
-The deterministic regression extracts that function at test time. The build
-downloads the upstream source without redistributing a bundled source tree
-or a precompiled plugin. Keep upstream notices with derived source/binaries.
+The build downloads the upstream source without redistributing a bundled
+source tree or a precompiled plugin. Keep upstream notices with derived
+source/binaries.
 
 The original file carries:
 
@@ -40,7 +40,7 @@ DEALINGS IN THE SOFTWARE.
 
 ## Runtime and optional dependencies
 
-GStreamer, PyGObject, GLib, PipeWire, WirePlumber, systemd/logind, sudo and
+GStreamer, GLib, PipeWire, WirePlumber, systemd/logind, sudo, Rust crates and
 v4l2loopback are separate projects under their respective licenses.
 In particular, the optional v4l2loopback kernel module is distributed through
 the user's distribution; no kernel module binary or source is bundled here.

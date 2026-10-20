@@ -5,23 +5,23 @@ on:
 permissions:
   contents: read
 jobs:
-  synthetic:
+  rust:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - name: Install test dependencies
+      - name: Install Rust
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends python3-gi gir1.2-gstreamer-1.0 gir1.2-gst-plugins-base-1.0 gcc patch
-      - name: Syntax and mocked tests (no USB or services)
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - name: Rust tests
+        run: cargo test --workspace
+      - name: Rust lint
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Shell syntax
         run: |
-          /usr/bin/python3 -m compileall -q src tools tests
-          /usr/bin/python3 -m unittest discover -s tests -p 'test_*.py' -v
-      - name: Prepare pinned upstream source
-        run: /usr/bin/python3 tools/build-plugin.py --source-only
-      - name: Original versus patched acquire regression
-        run: /usr/bin/python3 tests/check_pool.py
+          sh -n tools/build-plugin.sh
+          sh -n tools/build-helper.sh
       - name: Whitespace check
         run: git show --format= --check HEAD

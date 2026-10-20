@@ -46,7 +46,7 @@ pub fn read_previous(fd: &OwnedFd) -> Result<Option<f64>, HelperError> {
         return Ok(None);
     }
     text.parse::<f64>().map(Some).map_err(|_| {
-        // Python's `float(previous)` error text, including the bytes repr.
+        // Match the legacy float-parse error text, including the bytes repr.
         HelperError::Message(format!("could not convert string to float: b'{text}'"))
     })
 }

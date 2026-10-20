@@ -31,7 +31,7 @@ impl HelperError {
     }
 }
 
-/// Python-style `[Errno N] text`, matching `str(OSError)` on Linux.
+/// Compatibility-style `[Errno N] text`, matching the legacy message format on Linux.
 pub fn errno_message(code: i32) -> String {
     let text = unsafe {
         let pointer = libc::strerror(code);

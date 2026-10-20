@@ -111,7 +111,7 @@ impl BridgeReport {
 
     /// Match the live `json.dumps(status) + "\n"` shape without fsync.
     ///
-    /// Python uses `Path.with_suffix(".tmp")`; `with_extension` has the same
+    /// The reference implementation uses a `.tmp` suffix; `with_extension` has the same
     /// behavior for the state filename. Rename makes the replacement atomic.
     pub fn write_atomic(&self, path: &Path) -> io::Result<()> {
         if let Some(parent) = path.parent()

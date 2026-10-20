@@ -6,7 +6,6 @@ Capture and publishing run as the desktop user, not root. Images remain in
 memory and are exposed to local camera clients via PipeWire/V4L2. The bridge
 has no image upload, network listener or recording feature. Camera apps can
 still record or transmit video according to their own behavior and permissions.
-The opt-in Firefox check uses a loopback HTTP listener for test metadata only.
 
 Continuous physical capture means the LED can stay on and consumes CPU/power
 even with no consumers. Stopping the service ends capture. On the affected
@@ -36,11 +35,9 @@ SELECTED_USER ALL=(root) NOPASSWD: /usr/local/libexec/jieli-usb-reset ""
 
 `SELECTED_USER` is replaced with the explicitly supplied validated account.
 The trailing `""` restricts this command to **no arguments**. The helper also
-rejects arguments itself. The reference installation uses the reproducible
-Rust binary; older installations may still contain the legacy isolated Python
-helper until they are upgraded with the original release's removal step and a
-reviewed Rust install. The bridge invokes the fixed absolute helper through
-`/usr/bin/sudo -n`; it never supplies a USB path or ID.
+rejects arguments itself. The installed helper is the reproducible Rust binary;
+the bridge invokes the fixed absolute helper through `/usr/bin/sudo -n` and
+never supplies a USB path or ID.
 
 The root helper:
 
@@ -59,20 +56,20 @@ interrupts its composite USB microphone. The helper's eight-second alarm is
 best effort: a kernel-blocked ioctl may outlast it. The bridge's timeout and
 reset barrier do not authorize reopening over a failed or pending reset.
 
-The one-time root installer is itself reviewed trusted code. It checks the
-Rust helper hash, privileged directory ancestry, conflicts and `visudo` output;
-installs the helper and its manifest atomically before the rule; removes the
-rule first on rollback. Run it with `sudo /usr/bin/python3 -I`, from a checkout
-you reviewed after `tools/build-helper.sh build`.
-Do not replace this permission with broad passwordless sudo, a user-writable
-root service, or world-writable USB nodes.
+The root installation steps are intentionally explicit: build the helper with
+`tools/build-helper.sh build`, verify its SHA-256 manifest, install it as
+root:root 0755, stage the sudoers rule and validate it with `visudo -cf` before
+installing it. On rollback, remove the rule first and then the helper. Do not
+replace this permission with broad passwordless sudo, a user-writable root
+service, or world-writable USB nodes.
 
 ## Optional kernel module
 
 `v4l2loopback` is optional. It increases kernel code in use and depends on
 distribution DKMS/module-signing support. Installation is a separate explicit
-step. Setup reserves `/dev/video10`, refuses conflicting devices/configuration
-and never unloads an unrelated existing module automatically.
+step. The documented configuration reserves `/dev/video10`; review an existing
+module instance before changing or unloading it, and never unload another
+application's active loopback.
 
 ## Reporting
 

@@ -22,7 +22,7 @@ use crate::native::NativeOptions;
 
 const FRAME_INTERVAL: Duration = Duration::from_nanos(33_333_333);
 
-/// Keep the producer contract identical to the Python publisher. In
+/// Keep the producer contract identical to the validated reference publisher. In
 /// particular, `use-bufferpool=false` avoids handing Snapshot a consumer-owned
 /// buffer pool that it does not recycle after the window loses focus.
 fn pipeline_description() -> &'static str {

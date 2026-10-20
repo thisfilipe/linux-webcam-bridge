@@ -13,9 +13,9 @@ recorded to bound the claim, not as minimum guarantees for every distribution.
 | OS / desktop | Pop!_OS based on Ubuntu 24.04, GNOME 46 Wayland |
 | Kernel | `7.1.5-76070105-generic` |
 | PipeWire / WirePlumber | 1.6.8 / 0.5.12 |
-| GStreamer / Python | 1.24.2 / 3.12 |
+| GStreamer | 1.24.2 |
+| Rust | 1.92+ (helper build pinned to 1.99.0) |
 | Snapshot | Flatpak stable 51.0 |
-| Firefox | 157.0.1, isolated test profile |
 | v4l2loopback | 0.15.3, distribution DKMS package |
 
 | Scenario | Observation |
@@ -26,70 +26,45 @@ recorded to bound the claim, not as minimum guarantees for every distribution.
 | Direct V4L2 repeated open | Three 120-frame sessions: 30.10, 30.00, 29.78 FPS |
 | Simultaneous PipeWire consumer | 29.68 FPS during V4L2 validation |
 | Physical USB reconnect | Automatic recovery; PipeWire 30.06, V4L2 30.02, decoded 30.00 FPS |
-| Real Firefox WebRTC | Two genuine getUserMedia sessions, 1280×720 negotiated at 30 FPS |
-| Firefox frame presentation | Headless requestVideoFrameCallback measured 28.50 and 28.75 FPS |
-| Suspend/resume | Publisher identity survived; physical capture reset/reopened; user confirmed image |
-| Hibernate/resume | Same publisher survived; another capture session opened; user confirmed image |
-| Clean reboot | Deferred by the tester; **unverified** |
+| Real Firefox WebRTC (reference baseline) | Two genuine getUserMedia sessions, 1280×720 negotiated at 30 FPS |
+| Suspend/resume | Passed twice on the Rust stack, including with Snapshot active |
+| Hibernate/resume | Passed twice on the Rust stack, including with Snapshot active |
+| Clean reboot | Service auto-started, Jieli enumerated, capture `streaming` |
+| Real Rust-helper reset | `1224:2a25` re-enumerated and bridge returned to `streaming` |
 | Remote conferencing call | **Unverified** |
 | Other models / multiple identical cameras | **Unverified / unsupported** |
 
-The suspend and hibernate checks used the restricted helper, with no manual
-USB reset on resume. Capture session count advanced while publisher session
-count stayed at one.
-
-## Rust cutover validation (2026-10-20)
-
-The installed Rust supervisor, GStreamer/pipewiresink publisher and Rust USB
-helper were validated on the reference machine after the cutover:
-
-| Scenario | Result |
-| --- | --- |
-| Suspend/resume, twice (second with Snapshot active) | Recovered; camera re-enumerated; playback returned |
-| Hibernate/resume, twice (second with Snapshot active) | Recovered; sleep hook ran automatically; capture reopened |
-| Clean reboot | Service auto-started, Jieli enumerated, capture `streaming` |
-| Real Rust-helper reset | `1224:2a25` re-enumerated and bridge returned to `streaming` |
-| Snapshot / Edge / Meet | Camera switching and close/reopen passed |
-| Firefox-specific check | Blocked by a local Firefox renderer crash in this session; Edge/Meet covered the WebRTC path |
-
-The xHCI controller had failed resume once before these tests (`HC died;
-cleaning up`). The installed sleep hook can rebind controller `0000:06:00.4`
-if the camera is missing after resume; the later successful cycles did not need
-the rebind, so that fallback path itself remains unexercised.
+The reference Firefox test was performed before the Rust cutover. A later
+Firefox-specific check was blocked by a local renderer crash in the reference
+session; Edge and Meet validated the Rust WebRTC/camera path, including camera
+switching and close/reopen. This is an environmental limitation, not a claim
+that Firefox works on every system.
 
 ## Automated checks: no camera or root actions
 
-Use the distribution Python with PyGObject available:
-
 ```sh
-python3 -m unittest discover -s tests -p 'test_*.py'
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-The tests load repository source and use mocks/temporary files. They cover
-capture teardown ordering, publisher survival, stale frames and callbacks,
-sleep delay release, reset authorization/failures/timeouts, retry budgets,
-neutral placeholders, helper device/FD checks and installer conflicts.
-They do not connect to D-Bus, reset USB, load modules or change services.
+The Rust tests cover the state machine, frame ownership, placeholder, report,
+helper discovery/verification/lock logic, installer planning, manifest,
+backups, conflict handling and modified-file protection. They do not connect
+to D-Bus, reset USB, load modules or change services.
 
-After preparing a source tree:
+The plugin build is checked separately against the pinned source and installed
+development headers:
 
 ```sh
-python3 tools/build-plugin.py --source-only --build-dir build/regression
-python3 tests/check_pool.py --build-dir build/regression
+tools/build-plugin.sh
+GST_PLUGIN_PATH_1_0="$PWD/build/plugin" \
+GST_REGISTRY_1_0="$PWD/build/plugin/inspect-registry.bin" \
+  gst-inspect-1.0 pipewiresink
 ```
 
-The C harness extracts the real `acquire_buffer()` function from original and
-patched source and compiles it with deterministic fake dequeue/wait calls.
-The original is expected to fail the busy-then-free regression; the patched
-function must pass all 17 scenarios. This checks bounded scanning, silent
-release, `EBUSY` / `EPIPE` / `EAGAIN`, other errors, flushing, nonblocking and
-paused paths, and exact active/idle retry deadlines. It is not a substitute
-for full threaded PipeWire integration testing.
-
-CI runs the mocked tests and this source regression without any camera.
-The full plugin build is also validated locally against matching development
-headers and installed runtime libraries. CI does not provision PipeWire 1.6.8
-or claim a full plugin runtime/hardware test.
+The builder verifies the upstream archive SHA-256, applies the patch, compiles
+only the GStreamer plugin and fails on unresolved runtime symbols. It is not a
+substitute for full threaded PipeWire integration testing.
 
 ## Opt-in checks against your running installation
 
@@ -98,16 +73,16 @@ that are using the raw physical camera; use the shared source instead.
 
 ### Shared PipeWire source
 
+Inspect the node and verify that a separate client receives moving video:
+
 ```sh
-python3 tools/jieli-consumer-check.py \
-  --node-name jieli_720p30 \
-  --state-file "$XDG_RUNTIME_DIR/jieli-camera-bridge.json" \
-  --rounds 3 --seconds 4 --idle 7 --hold-buffer
+pw-dump | grep -A20 -B5 'jieli_720p30'
+gst-launch-1.0 pipewiresrc target-object=jieli_720p30 ! \
+  videoconvert ! fakesink sync=false
 ```
 
-This checks I420 frame size, measured cadence, retained-buffer integrity and
-that consumer close/reopen does not recreate physical capture or publication.
-Status output may contain local runtime metadata; sanitize before publishing.
+The exact GStreamer target property may vary with your GStreamer/WirePlumber
+version. A working desktop camera app is the authoritative functional check.
 
 ### Direct V4L2 source
 
@@ -119,24 +94,9 @@ v4l2-ctl --device=/dev/video10 --stream-mmap=3 --stream-count=120 \
   --stream-poll --stream-to=/dev/null
 ```
 
-Repeat the latter command three times. It opens the **virtual** device, not
-the physical Jieli. Also confirm a real app shows moving, intact video; sink
+Repeat the latter command three times. It opens the **virtual** device, not the
+physical Jieli. Also confirm a real app shows moving, intact video; sink
 statistics alone do not establish functional capture.
-
-### Firefox WebRTC
-
-```sh
-python3 tools/check-firefox-webrtc.py
-```
-
-Requires a native Firefox executable and the optional V4L2 device. The check
-creates an isolated temporary profile, forces the real `Jieli 720p30 V4L2`
-device, disables fake streams and opens it twice. It counts actual video
-presentation callbacks, verifies dimensions and requires at least 28 FPS.
-It posts metadata only to an ephemeral `127.0.0.1` server. The normal profile
-is never opened; temporary browser permissions are deleted afterward.
-Use `--firefox /path/to/firefox` or `--output result.json` if desired.
-Browser behavior/preferences can change in later releases.
 
 ### Manual desktop checklist
 
@@ -148,19 +108,12 @@ Browser behavior/preferences can change in later releases.
 6. If hibernation already works on your system, test it yourself and repeat.
 7. At a convenient time, perform a clean reboot and report the separate result.
 
-The test scripts never initiate system sleep, hibernate or reboot.
+Never initiate sleep, hibernate or reboot just to satisfy a test on someone
+else's machine.
 
 ## Repository packaging validation
 
-The public extraction changes install paths, English placeholder text and
-installer interfaces, not the recovery design. Mocked tests, the pinned-source
-patch regression, isolated plugin build/link/load checks and publication audit
-are run on the extracted tree. The working deployment is preserved throughout;
-the portable installers have not been root-installed over it.
-
-The initial public extraction passed **76 Python tests**, the **17-scenario C
-regression** (with the unpatched baseline failing as expected), syntax checks,
-user-unit verification, a fresh official archive download/checksum, and the
-full isolated plugin compile/link/load check. Publication review checks the
-tracked text and commit identity; generated binaries, local logs and private
-diagnostic reports are excluded.
+The source tree contains the Rust runtime, Rust helper, Rust user installer,
+the pinned C patch and the shell build wrapper. Generated binaries, local logs
+and private diagnostic reports are excluded from the repository. The release
+has not been root-installed over every supported distribution.

@@ -1,8 +1,6 @@
 /build/
 /dist/
 /target/
-__pycache__/
-*.py[cod]
 *.so
 *.o
 *.deb

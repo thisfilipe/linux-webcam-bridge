@@ -72,10 +72,11 @@ owned immutable `bytes`, releases the GStreamer sample and uses a queue of
 one latest frame. A writer thread feeds raw bytes to a separate publisher.
 The publisher uses independent bounded queues for PipeWire and optional V4L2.
 
-In the reference Python/GI stack, `Gst.Buffer.fill(bytearray)` took about
-36.6 ms per frame, versus about 0.15 ms with `bytes`. Preserve the immutable
-bytes path when modifying this code; conversion overhead can exceed a 33 ms
-frame budget. These are local microbenchmark observations, not universal timings.
+In the pre-Rust reference stack, filling a GStreamer buffer from a mutable
+bytearray took about 36.6 ms per frame, versus about 0.15 ms with an immutable
+bytes path. Preserve the immutable frame path in the Rust implementation;
+conversion overhead can exceed a 33 ms frame budget. These are local
+microbenchmark observations, not universal timings.
 
 The publisher remains alive even if capture is absent. After 250 ms without
 real input it generates a neutral I420 status image. It does not keep the last
