@@ -688,6 +688,7 @@ helper and sudoers rule do not change if the path/interface are preserved.
 | 2026-10-19 | P4b V4L2 writer | native `v4l` 0.14 mmap output, YU12 1280x720 30 fps, 8 buffers; controlled loopback test captured 30 frames at 29.92 fps; live service restored and streaming at 29.5 fps with its own V4L2 output active |
 | 2026-10-19 | P5 pre-cutover stack | live stopped; Rust real capture → native publisher; PipeWire consumer streamed for 5 s; V4L2 reader captured 30 frames at 29.92 fps; watchdog reset recovered at reenumeration `008/013`; live restored and streaming at ~29.5 fps; 3×120/Firefox, Rust-helper hardware and real suspend gates remain |
 | 2026-10-19 | G8 cutover | release binaries and Rust unit installed; Python programs/unit retained as rollback; systemd restart, reset recovery, 3×120 V4L2 at ~29.9 fps, 30.0 fps PipeWire consumer and 60 s stability passed; `NRestarts=0`, no test leftovers; Firefox headless crashes in this session, so manual Firefox and suspend/hibernate/reboot gates remain |
+| 2026-10-19 | P4a timestamp fix | `SPA_META_Header` now carries advancing PTS/sequence; consumer PTS advances by 33.333 ms per frame, fixing the frozen/still-frame display in Snapshot while frame counters were already advancing |
 
 **Next step:** user-facing validation (Snapshot/Firefox, suspend, hibernate,
 clean reboot), then the privileged Rust-helper swap and P6 cleanup. The

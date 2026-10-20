@@ -29,6 +29,7 @@ struct Stats {
     last_errno: AtomicI32,
     max_datas: AtomicU32,
     short_buffers: AtomicU64,
+    header_missing: AtomicU64,
     process_calls: AtomicU64,
     trigger_errors: AtomicU64,
     timer_ticks: AtomicU64,
@@ -52,6 +53,7 @@ struct UserData {
     quit: &'static AtomicBool,
     failed: &'static AtomicBool,
     logged_layout: bool,
+    sequence: u64,
 }
 
 fn prop(key: u32, value: Value) -> Property {
@@ -153,7 +155,16 @@ fn meta_param() -> Vec<u8> {
     serialize(object)
 }
 
-fn fill_frame(raw: *mut pw::sys::pw_buffer, frame: &Frame, stats: &Stats) {
+fn frame_pts(sequence: u64) -> i64 {
+    sequence.saturating_sub(1) as i64 * FRAME_INTERVAL_NS as i64
+}
+
+fn fill_frame(
+    raw: *mut pw::sys::pw_buffer,
+    frame: &Frame,
+    stats: &Stats,
+    sequence: u64,
+) {
     let sizes = [Y_SIZE, UV_SIZE, UV_SIZE];
     let strides = [WIDTH as i32, (WIDTH / 2) as i32, (WIDTH / 2) as i32];
 
@@ -192,6 +203,26 @@ fn fill_frame(raw: *mut pw::sys::pw_buffer, frame: &Frame, stats: &Stats) {
                 chunk.flags = 0;
             }
         }
+
+        // pipewiresrc derives buffer PTS from SPA_META_Header. Without this the
+        // sink receives the same timestamp for every frame and displays stills.
+        let header = libspa_sys::spa_buffer_find_meta_data(
+            buffer,
+            libspa_sys::SPA_META_Header,
+            std::mem::size_of::<libspa_sys::spa_meta_header>(),
+        );
+        if header.is_null() {
+            if stats.header_missing.fetch_add(1, Ordering::Relaxed) == 0 {
+                eprintln!("publisher: SPA_META_Header missing from negotiated buffers");
+            }
+            return;
+        }
+        let header = &mut *(header as *mut libspa_sys::spa_meta_header);
+        header.flags = 0;
+        header.offset = 0;
+        header.pts = frame_pts(sequence);
+        header.dts_offset = 0;
+        header.seq = sequence;
     }
 }
 
@@ -239,6 +270,7 @@ pub fn run(options: NativeOptions<'_>) -> Result<(), String> {
             quit: options.quit,
             failed: options.failed,
             logged_layout: false,
+            sequence: 0,
         })
         .state_changed(|_, data, old, new| {
             let streaming = matches!(&new, pw::stream::StreamState::Streaming);
@@ -331,7 +363,8 @@ pub fn run(options: NativeOptions<'_>) -> Result<(), String> {
                 }
             }
 
-            fill_frame(raw, &frame, &data.stats);
+            data.sequence = data.sequence.wrapping_add(1);
+            fill_frame(raw, &frame, &data.stats, data.sequence);
             unsafe { stream.queue_raw_buffer(raw) };
             data.stats.frames.fetch_add(1, Ordering::Relaxed);
             data.published.fetch_add(1, Ordering::Relaxed);
@@ -419,4 +452,16 @@ pub fn run(options: NativeOptions<'_>) -> Result<(), String> {
     drop(listener);
     drop(stream);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn frame_pts_advances_at_thirty_fps() {
+        assert_eq!(frame_pts(1), 0);
+        assert_eq!(frame_pts(2), FRAME_INTERVAL_NS as i64);
+        assert_eq!(frame_pts(31), 30 * FRAME_INTERVAL_NS as i64);
+    }
 }
