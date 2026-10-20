@@ -318,7 +318,7 @@ tests/                           # integration + parity harness
 | `pipewire` / `libspa` | 0.10.1 | native publisher; features `v0_3_50` |
 | `gstreamer` / `gstreamer-app` | 0.24.5 | capture; matches the deployed GStreamer 1.24.2 (0.25.x needs newer headers) |
 | `v4l` | 0.14.0 | V4L2 output (stalled; see risks) |
-| `zbus` | 5.19 (if used) | alternative logind; **not** zbus 6 |
+| `zbus` | 6.0.0 | logind `Inhibit`/`PrepareForSleep`; validated on the system bus |
 | `rustix` / `libc` | 1.1.5 / — | helper |
 | `signal-hook` | 0.4.5 | signals |
 | `serde` / `serde_json` | 1.x | state/manifest |
@@ -684,9 +684,9 @@ helper and sudoers rule do not change if the path/interface are preserved.
 | 2026-10-19 | P4a PipeWire publisher | `jieli-publisher` native PipeWire + stdin framing/placeholder + CLI/PID/signals + V4L2 discovery; smoke 118 frames in ~4 s; live service unaffected; V4L2 writer pending |
 | 2026-10-19 | P3 test-source supervisor | `jieli-bridge --test-source`: `gstreamer-rs` 0.24.5 (GStreamer 1.24.2) `videotestsrc -> appsink -> publisher stdin`; state/report E2E 300 frames/10 s at 29.98 fps; consumer received 119 frames/4 s; real V4L2 capture, logind/sleep and helper reset still pending |
 | 2026-10-19 | P2 reproducibility | `tools/build-helper.sh` builds twice with remapped paths; byte-identical `jieli-usb-reset` (SHA-256 `8b82d909...`); installer wiring pending |
-| 2026-10-19 | P3 real capture gate | live stopped for a controlled window; Rust decoded MJPEG→I420, watchdog reset succeeded via the installed helper (reenumeration `008/009`), reached 667 frames at 29.58 fps; live restored and streaming at 28.37 fps; logind sleep monitor and native V4L2 writer still pending |
+| 2026-10-19 | P3 real capture gate | live stopped for a controlled window; Rust decoded MJPEG→I420, watchdog reset succeeded via the installed helper (reenumeration `008/009`), reached 667 frames at 29.58 fps; live restored and streaming at 28.37 fps; logind `Inhibit` acquire/release validated, but an actual suspend/`PrepareForSleep` E2E and the native V4L2 writer remain pending |
 
-**Next step:** port the logind sleep monitor (inhibit + PrepareForSleep), then P4b
-(native V4L2 writer), then installers/manifest and the Rust-helper hardware gate.
-The remaining P0b items (EPIPE/EAGAIN reproduction, meta header population,
+**Next step:** P4b (native V4L2 writer via `v4l`), then installers/manifest, the
+Rust-helper hardware gate, and a suspend/resume gate for `PrepareForSleep`. The
+remaining P0b items (EPIPE/EAGAIN reproduction, meta header population,
 watchdog/recreation) are folded into P4a. No runtime change until G8.

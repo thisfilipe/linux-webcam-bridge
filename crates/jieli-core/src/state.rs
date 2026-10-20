@@ -396,6 +396,16 @@ impl BridgeState {
         self.recover(now, "Resuming camera after system sleep", true)
     }
 
+    /// Notify that logind's delay budget expired before capture teardown.
+    pub fn sleep_deadline(&mut self) {
+        if self.sleeping && self.capture_closing {
+            self.error = Some(
+                "Capture teardown exceeded logind sleep delay; recovery waits for teardown"
+                    .to_string(),
+            );
+        }
+    }
+
     pub fn reset_finished(
         &mut self,
         now: f64,
@@ -784,6 +794,19 @@ mod tests {
         assert!(actions.contains(&Action::ReleaseSleepInhibitor));
         assert!(state.publisher_active);
         assert!(state.report(1, 110.0).placeholder);
+    }
+
+    #[test]
+    fn sleep_deadline_reports_teardown_hang() {
+        let (mut state, _) = active();
+        state.prepare_sleep();
+        state.sleep_deadline();
+        assert!(
+            state
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("logind sleep delay"))
+        );
     }
 
     #[test]

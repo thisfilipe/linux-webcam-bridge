@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use jieli_bridge::args::{ArgsError, USAGE, parse_args};
 use jieli_bridge::capture::{Capture, CaptureCallbacks, CaptureSource};
 use jieli_bridge::device;
+use jieli_bridge::logind::{SleepEvent, SleepMonitor};
 use jieli_bridge::publisher::PublisherManager;
 use jieli_bridge::reset::ResetManager;
 use jieli_core::frame::Frame;
@@ -47,6 +48,11 @@ fn main() {
     } else {
         "Jieli 720p30"
     };
+    let mut sleep_monitor = if arguments.test_source {
+        None
+    } else {
+        Some(SleepMonitor::start())
+    };
 
     install_signals();
     let start = Arc::new(Instant::now());
@@ -76,6 +82,7 @@ fn main() {
                 &mut capture,
                 &mut publisher,
                 &mut reset,
+                sleep_monitor.as_ref(),
                 &frame_tx,
                 &start,
                 &source,
@@ -98,6 +105,7 @@ fn main() {
                 &mut capture,
                 &mut publisher,
                 &mut reset,
+                sleep_monitor.as_ref(),
                 &frame_tx,
                 &start,
                 &source,
@@ -118,8 +126,12 @@ fn main() {
         } else {
             device::identity(Path::new(device::DEVICE_PATH))
         };
+        let inhibited = sleep_monitor
+            .as_ref()
+            .map(SleepMonitor::inhibited)
+            .unwrap_or(true);
         let actions = match state.lock() {
-            Ok(mut state) => state.tick(now, identity.as_deref(), true),
+            Ok(mut state) => state.tick(now, identity.as_deref(), inhibited),
             Err(_) => break,
         };
         apply_actions(
@@ -128,6 +140,7 @@ fn main() {
             &mut capture,
             &mut publisher,
             &mut reset,
+            sleep_monitor.as_ref(),
             &frame_tx,
             &start,
             &source,
@@ -149,7 +162,75 @@ fn main() {
         if QUIT.load(Ordering::SeqCst) {
             break;
         }
-        std::thread::sleep(Duration::from_millis(1000));
+
+        let event = match sleep_monitor.as_mut() {
+            Some(monitor) => monitor.recv_timeout(Duration::from_secs(1)),
+            None => {
+                std::thread::sleep(Duration::from_secs(1));
+                None
+            }
+        };
+        if let Some(event) = event {
+            let now = start.elapsed().as_secs_f64();
+            match event {
+                SleepEvent::Prepare => {
+                    let actions = state
+                        .lock()
+                        .map(|mut state| state.prepare_sleep())
+                        .unwrap_or_default();
+                    apply_actions(
+                        actions,
+                        &state,
+                        &mut capture,
+                        &mut publisher,
+                        &mut reset,
+                        sleep_monitor.as_ref(),
+                        &frame_tx,
+                        &start,
+                        &source,
+                        description,
+                        &arguments.node_name,
+                        now,
+                    );
+                }
+                SleepEvent::Resume => {
+                    let actions = state
+                        .lock()
+                        .map(|mut state| state.resume(now))
+                        .unwrap_or_default();
+                    apply_actions(
+                        actions,
+                        &state,
+                        &mut capture,
+                        &mut publisher,
+                        &mut reset,
+                        sleep_monitor.as_ref(),
+                        &frame_tx,
+                        &start,
+                        &source,
+                        description,
+                        &arguments.node_name,
+                        now,
+                    );
+                }
+                SleepEvent::Deadline => {
+                    if let Ok(mut state) = state.lock() {
+                        state.sleep_deadline();
+                    }
+                }
+                SleepEvent::Inhibited => {
+                    if let Ok(mut state) = state.lock() {
+                        state.set_sleep_monitor_error(None);
+                    }
+                }
+                SleepEvent::Error(error) => {
+                    eprintln!("{error}");
+                    if let Ok(mut state) = state.lock() {
+                        state.set_sleep_monitor_error(Some(error));
+                    }
+                }
+            }
+        }
     }
 
     let shutdown = state
@@ -162,6 +243,7 @@ fn main() {
         &mut capture,
         &mut publisher,
         &mut reset,
+        sleep_monitor.as_ref(),
         &frame_tx,
         &start,
         &source,
@@ -173,6 +255,9 @@ fn main() {
         let _ = active.stop();
     }
     publisher.stop();
+    if let Some(monitor) = sleep_monitor.as_ref() {
+        monitor.release();
+    }
     let _ = std::fs::remove_file(&arguments.state_file);
 }
 
@@ -183,6 +268,7 @@ fn apply_actions(
     capture: &mut Option<Capture>,
     publisher: &mut PublisherManager,
     reset: &mut ResetManager,
+    sleep: Option<&SleepMonitor>,
     frame_tx: &Arc<Mutex<Option<SyncSender<Frame>>>>,
     start: &Arc<Instant>,
     source: &CaptureSource,
@@ -252,8 +338,9 @@ fn apply_actions(
                 println!("Resetting USB");
             }
             Action::ReleaseSleepInhibitor => {
-                // The logind sleep monitor is not ported yet; the P3 hardware
-                // window runs without suspend and keeps the state inhibited.
+                if let Some(monitor) = sleep {
+                    monitor.release();
+                }
             }
         }
     }

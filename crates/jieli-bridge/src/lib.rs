@@ -12,4 +12,7 @@ pub mod reset;
 pub mod capture;
 
 #[cfg(feature = "native")]
+pub mod logind;
+
+#[cfg(feature = "native")]
 pub mod publisher;

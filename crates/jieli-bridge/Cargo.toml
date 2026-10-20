@@ -9,13 +9,20 @@ description = "Supervisor for the Jieli camera bridge: capture, publisher lifecy
 
 [features]
 default = []
-native = ["dep:gstreamer", "dep:gstreamer-app"]
+native = [
+    "dep:gstreamer",
+    "dep:gstreamer-app",
+    "dep:zbus",
+    "dep:futures-util",
+]
 
 [dependencies]
 jieli-core = { path = "../jieli-core" }
 libc.workspace = true
 gstreamer = { version = "0.24.5", optional = true }
 gstreamer-app = { version = "0.24.5", optional = true }
+zbus = { version = "6.0.0", optional = true }
+futures-util = { version = "0.3", optional = true }
 
 [dev-dependencies]
 tempfile.workspace = true
