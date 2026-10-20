@@ -84,10 +84,31 @@ Post-fix checks on 2026-10-20:
   close/reopen all preserve continuous playback;
 - service `recovery=streaming`, about 29.9 fps, `NRestarts=0`.
 
+## Suspend/resume recovery
+
+A real suspend/resume exposed an xHCI controller failure: the kernel logged
+`xHC error in resume`, `HC died; cleaning up` and `failed to resume async:
+-110`; the Jieli device disappeared from the bus and only a reboot restored the
+controller. No userspace process can revive a dead xHCI controller.
+
+Two mitigations are prepared:
+
+- the bridge classifies the helper's `found 0` result as a missing device and
+  keeps retrying with the placeholder instead of entering the terminal
+  `exhausted` state; it also logs `prepare`/`resume` and capture teardown;
+- `config/jieli-usb-resume` is a systemd-sleep `post` hook that rebinds only the
+  affected xHCI controller (`0000:06:00.4`) when the camera is still absent
+  after resume and waits for re-enumeration. It must be installed as root:
+  `sudo install -m 0755 config/jieli-usb-resume /etc/systemd/system-sleep/50-jieli-usb-resume`.
+
+Do not remove the hook on the reference machine until suspend/resume has been
+retested with it. The next controlled test must be done by the user; reboot is
+the fallback if the controller still does not return.
+
 The headless Firefox check is not usable in this reference session: Firefox
 crashes in its software renderer before returning metadata. Test Firefox
-manually, with the normal desktop session. Suspend, hibernate and reboot were
-not initiated by the cutover.
+manually, with the normal desktop session. The clean reboot gate passed after
+the camera returned; suspend/hibernate remain under test.
 
 ## Rollback
 

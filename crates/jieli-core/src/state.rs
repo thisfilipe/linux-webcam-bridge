@@ -34,6 +34,10 @@ impl BridgeConfig {
 pub enum ResetError {
     Unavailable(String),
     Failed(String),
+    /// The helper found no Jieli device on the bus. This is a re-enumeration
+    /// condition, not a failed reset; keep recovery open instead of exhausting
+    /// the bounded reset budget.
+    DeviceMissing(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -431,6 +435,14 @@ impl BridgeState {
                     .or_else(|| Some("missing".to_string()));
                 self.error = Some(message);
             }
+            Err(ResetError::DeviceMissing(message)) => {
+                self.retries = 0;
+                self.recovery = Recovery::Backoff;
+                self.retry_at = now + 5.0;
+                self.error = Some(format!(
+                    "Jieli camera not present; waiting for USB re-enumeration: {message}"
+                ));
+            }
             Err(ResetError::Failed(message)) => {
                 actions.extend(self.recover(now, &format!("USB reset failed: {message}"), false));
             }
@@ -762,6 +774,33 @@ mod tests {
         assert!(!actions.contains(&Action::BeginReset));
         assert_eq!(state.recovery, Recovery::Exhausted);
         assert!(state.blocked.is_some());
+    }
+
+    #[test]
+    fn absent_device_does_not_exhaust_the_reset_budget() {
+        let mut state = state();
+        state.reset_required = true;
+        state.identity = Some("camera-A".to_string());
+        for _ in 0..10 {
+            let actions = state.tick(state.retry_at, Some("camera-A"), true);
+            assert!(actions.contains(&Action::BeginReset));
+            let actions = state.reset_finished(
+                state.retry_at,
+                Err(ResetError::DeviceMissing(
+                    "Expected exactly one Jieli 1224:2a25; found 0".to_string(),
+                )),
+            );
+            assert!(actions.is_empty());
+            assert_eq!(state.retries, 0);
+            assert_eq!(state.recovery, Recovery::Backoff);
+            assert!(state.reset_required);
+            assert!(
+                state
+                    .error
+                    .as_deref()
+                    .is_some_and(|error| error.contains("waiting for USB"))
+            );
+        }
     }
 
     #[test]

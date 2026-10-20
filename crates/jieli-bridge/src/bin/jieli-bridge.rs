@@ -72,6 +72,13 @@ fn main() {
         let now = start.elapsed().as_secs_f64();
 
         if let Some(result) = reset.poll() {
+            match &result {
+                Ok(result) => println!(
+                    "USB reset result: returncode={}, message={}",
+                    result.returncode, result.message
+                ),
+                Err(error) => eprintln!("USB reset error: {error:?}"),
+            }
             let actions = state
                 .lock()
                 .map(|mut state| state.reset_finished(now, result))
@@ -174,6 +181,7 @@ fn main() {
             let now = start.elapsed().as_secs_f64();
             match event {
                 SleepEvent::Prepare => {
+                    println!("Sleep prepare: closing capture");
                     let actions = state
                         .lock()
                         .map(|mut state| state.prepare_sleep())
@@ -194,6 +202,7 @@ fn main() {
                     );
                 }
                 SleepEvent::Resume => {
+                    println!("Sleep resume: waiting for camera re-enumeration");
                     let actions = state
                         .lock()
                         .map(|mut state| state.resume(now))
@@ -325,6 +334,10 @@ fn apply_actions(
             Action::StopCapture => {
                 if let Some(active) = capture.take() {
                     let result = active.stop();
+                    match &result {
+                        Ok(()) => println!("Capture stopped for teardown"),
+                        Err(error) => eprintln!("Capture teardown failed: {error}"),
+                    }
                     if let Ok(mut state) = state.lock() {
                         let _ = state.capture_closed(result);
                     }
@@ -340,6 +353,7 @@ fn apply_actions(
             Action::ReleaseSleepInhibitor => {
                 if let Some(monitor) = sleep {
                     monitor.release();
+                    println!("Sleep inhibitor released");
                 }
             }
         }

@@ -24,6 +24,9 @@ pub fn classify(returncode: i32, stdout: &str, stderr: &str) -> Result<ResetResu
             "Reset helper not authorized: {text}"
         )));
     }
+    if returncode != 0 && text.contains("found 0") {
+        return Err(ResetError::DeviceMissing(text));
+    }
     Ok(ResetResult {
         returncode,
         message: text,
@@ -175,6 +178,20 @@ mod tests {
             Err(ResetError::Unavailable(_)) => {}
             other => panic!("unexpected {other:?}"),
         }
+    }
+
+    #[test]
+    fn absent_device_is_distinct_from_a_failed_reset() {
+        assert_eq!(
+            classify(
+                1,
+                "",
+                "Expected exactly one Jieli 1224:2a25; found 0\n"
+            ),
+            Err(ResetError::DeviceMissing(
+                "Expected exactly one Jieli 1224:2a25; found 0".to_string()
+            ))
+        );
     }
 
     #[test]
