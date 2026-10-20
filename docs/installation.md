@@ -62,13 +62,19 @@ cd linux-webcam-bridge
 Read [security.md](security.md) and the installer scripts before executing
 privileged steps. No one-line download-and-run installer is provided.
 
-## 2. Build the isolated plugin
+## 2. Build the isolated plugin and Rust helper
 
 ```sh
 python3 tools/build-plugin.py
 python3 tests/check_pool.py
 python3 -m unittest discover -s tests -p 'test_*.py'
+tools/build-helper.sh build
 ```
+
+`tools/build-helper.sh` requires the pinned Rust toolchain `1.99.0`; it builds
+the helper twice, verifies byte-identical output, and writes
+`dist/jieli-usb-reset` plus its SHA-256 manifest. The USB installer refuses a
+missing or changed artifact.
 
 The builder downloads the official PipeWire 1.6.8 archive, checks SHA-256,
 extracts into `build/plugin/`, applies the patch, compiles only the GStreamer
@@ -123,11 +129,13 @@ python3 tools/setup-usb-recovery.py --user "$(id -un)"
 sudo /usr/bin/python3 -I tools/setup-usb-recovery.py --user "$(id -un)" --install
 ```
 
-The first command is a preview. The second installs a root-owned no-argument
-helper and a sudoers entry for the explicitly selected non-root user. It
-validates the rule with `visudo`. It does not reset the camera during setup.
-The helper only resets a positively identified Jieli `1224:2a25` and also
-briefly interrupts its microphone. Review [the precise permission](security.md).
+The first command is a preview. Build `dist/jieli-usb-reset` first with
+`tools/build-helper.sh build`; the installer verifies its pinned SHA-256
+manifest. The second command installs the root-owned Rust helper, its manifest
+and a sudoers entry for the explicitly selected non-root user. It validates the
+rule with `visudo`. It does not reset the camera during setup. The helper only
+resets a positively identified Jieli `1224:2a25` and also briefly interrupts its
+microphone. Review [the precise permission](security.md).
 
 ## 5. Optional direct V4L2 support
 

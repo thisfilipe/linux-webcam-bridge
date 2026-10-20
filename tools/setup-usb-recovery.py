@@ -1,5 +1,5 @@
 #!/usr/bin/python3 -I
-"""Plan/install/remove one Jieli-only privileged reset helper and sudo rule.
+"""Plan/install/remove one Jieli-only privileged Rust reset helper and sudo rule.
 
 The default only prints a plan. Mutations require root, Python isolated mode
 (-I), and an explicit --install or --remove. --user is always required and must
@@ -23,9 +23,10 @@ import subprocess
 import sys
 import tempfile
 
-SOURCE = Path(__file__).resolve().parents[1] / "src/jieli-usb-reset"
+SOURCE = Path(__file__).resolve().parents[1] / "dist/jieli-usb-reset"
 HELPER = Path("/usr/local/libexec/jieli-usb-reset")
-HELPER_SHA256 = "5673b774c9c54d8cc1d531f078ed9ad74d4ed430a5a74ab87497d5762e9be0d0"
+HELPER_SHA256 = "8b82d909212be61ab7c148869012623688b4212d483c1dabee53d03c5499684b"
+MANIFEST = Path("/usr/local/libexec/jieli-usb-reset.sha256")
 RULE = Path("/etc/sudoers.d/90-jieli-camera-reset")
 
 
@@ -84,6 +85,10 @@ def require_root_isolated():
         raise SystemExit("Run the selected mode with sudo /usr/bin/python3 -I tools/setup-usb-recovery.py --user LOGIN")
 
 
+def manifest_text():
+    return f"{HELPER_SHA256}  {HELPER}\n".encode("ascii")
+
+
 def install(source, rule):
     for directory in (HELPER.parent, RULE.parent):
         ensure_directory(directory)
@@ -94,6 +99,7 @@ def install(source, rule):
         os.chown(staged_rule, 0, 0)
         subprocess.run(["/usr/sbin/visudo", "-cf", str(staged_rule)], check=True)
         descriptor, name = tempfile.mkstemp(prefix=".jieli-reset-", dir=HELPER.parent)
+        manifest_descriptor, manifest_name = tempfile.mkstemp(prefix=".jieli-reset-manifest-", dir=HELPER.parent)
         try:
             with os.fdopen(descriptor, "wb") as file:
                 file.write(source)
@@ -101,10 +107,18 @@ def install(source, rule):
                 os.fchmod(file.fileno(), 0o755)
                 os.fchown(file.fileno(), 0, 0)
                 os.fsync(file.fileno())
+            with os.fdopen(manifest_descriptor, "wb") as file:
+                file.write(manifest_text())
+                file.flush()
+                os.fchmod(file.fileno(), 0o644)
+                os.fchown(file.fileno(), 0, 0)
+                os.fsync(file.fileno())
             os.replace(name, HELPER)
             os.replace(staged_rule, RULE)
+            os.replace(manifest_name, MANIFEST)
         finally:
             Path(name).unlink(missing_ok=True)
+            Path(manifest_name).unlink(missing_ok=True)
     subprocess.run(["/usr/sbin/visudo", "-cf", str(RULE)], check=True)
 
 
@@ -118,6 +132,8 @@ def main():
     user = validated_user(args.user)
     print("Purpose: bounded USB recovery for exactly one Jieli 1224:2a25.")
     print(f"Helper: {HELPER} root:root 0755; SHA256={HELPER_SHA256}")
+    print(f"Manifest: {MANIFEST} root:root 0644")
+    print("Build the binary first with tools/build-helper.sh build.")
     print(f"Rule: {RULE} root:root 0440")
     print(f"Permission: {user} may run only the installed no-argument helper without a password.")
     print("Risk: reset briefly interrupts both video and microphone; no service or device is touched in this plan.")
@@ -132,14 +148,16 @@ def main():
     for directory in (HELPER.parent, RULE.parent):
         check_directory_tree(directory)
     check_existing(HELPER, source, 0o755)
+    check_existing(MANIFEST, manifest_text(), 0o644)
     check_existing(RULE, rule, 0o440)
     if args.remove:
         RULE.unlink(missing_ok=True)
         HELPER.unlink(missing_ok=True)
-        print("Exact reset permission and helper removed; running processes were not stopped.")
+        MANIFEST.unlink(missing_ok=True)
+        print("Exact reset permission and Rust helper removed; running processes were not stopped.")
     else:
         install(source, rule)
-        print("Installed the exact reset helper and rule; validate bridge recovery separately.")
+        print("Installed the exact Rust reset helper, manifest and rule; validate bridge recovery separately.")
 
 
 if __name__ == "__main__":

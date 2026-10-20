@@ -21,9 +21,15 @@ the same directory and keeps the live node name `jieli_720p30`, the description
 `Jieli 720p30` and the default state file
 `$XDG_RUNTIME_DIR/jieli-camera-bridge.json`.
 
-The root USB helper path and interface are unchanged. The reference cutover
-kept the existing installed helper; replacing that root-owned file with
-`target/release/jieli-usb-reset` requires an explicit privileged step.
+The root USB helper path and interface are unchanged. The reference
+installation now uses the reproducible Rust helper (`jieli-usb-reset`,
+SHA-256 `8b82d909212be61ab7c148869012623688b4212d483c1dabee53d03c5499684b`)
+at `/usr/local/libexec/jieli-usb-reset`; the previous Python helper is kept
+root-owned at `/usr/local/libexec/jieli-usb-reset.python-backup-20261020`.
+The no-argument sudoers rule was not changed. A real reset through the bridge's
+exact `/usr/bin/sudo -n` path passed
+(`Jieli reenumerated at 008/008; capture must validate recovery`), and the
+service returned to `streaming` without restarting its unit.
 
 ## Build and install
 

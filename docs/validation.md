@@ -36,7 +36,26 @@ recorded to bound the claim, not as minimum guarantees for every distribution.
 
 The suspend and hibernate checks used the restricted helper, with no manual
 USB reset on resume. Capture session count advanced while publisher session
-count stayed at one. Those checks do not substitute for a clean-boot test.
+count stayed at one.
+
+## Rust cutover validation (2026-10-20)
+
+The installed Rust supervisor, GStreamer/pipewiresink publisher and Rust USB
+helper were validated on the reference machine after the cutover:
+
+| Scenario | Result |
+| --- | --- |
+| Suspend/resume, twice (second with Snapshot active) | Recovered; camera re-enumerated; playback returned |
+| Hibernate/resume, twice (second with Snapshot active) | Recovered; sleep hook ran automatically; capture reopened |
+| Clean reboot | Service auto-started, Jieli enumerated, capture `streaming` |
+| Real Rust-helper reset | `1224:2a25` re-enumerated and bridge returned to `streaming` |
+| Snapshot / Edge / Meet | Camera switching and close/reopen passed |
+| Firefox-specific check | Blocked by a local Firefox renderer crash in this session; Edge/Meet covered the WebRTC path |
+
+The xHCI controller had failed resume once before these tests (`HC died;
+cleaning up`). The installed sleep hook can rebind controller `0000:06:00.4`
+if the camera is missing after resume; the later successful cycles did not need
+the rebind, so that fallback path itself remains unexercised.
 
 ## Automated checks: no camera or root actions
 

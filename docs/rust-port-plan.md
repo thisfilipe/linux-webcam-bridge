@@ -393,8 +393,13 @@ verified fd) have 24 unit tests plus 2 CLI tests. `tools/build-helper.sh`
 performs two independent release builds with path remapping and emits the
 SHA-256 manifest; both builds are byte-identical (current hash
 `8b82d909212be61ab7c148869012623688b4212d483c1dabee53d03c5499684b`).
-Installer/manifest integration is still pending, so the Python helper stays
-installed until P5/P6.
+The reference installation has now replaced the Python helper with this
+reproducible Rust binary (SHA-256 `8b82d909...`) and recorded the installed
+hash alongside it; the Python helper remains as a root-owned rollback copy.
+A real reset through the bridge's `/usr/bin/sudo -n` path passed. The USB
+installer now consumes the reproducible `dist/jieli-usb-reset` artifact and
+verifies its manifest; the remaining P6 installer work is the user-file and
+V4L2 tooling and the Python-runtime removal.
 
 ---
 
@@ -612,7 +617,6 @@ helper and sudoers rule do not change if the path/interface are preserved.
 
 ## 8. Not verified
 
-- Clean reboot (never tested by the current project).
 - Real remote call.
 - Native publisher watchdog/recreation after a #5378 wedge; the native
   publisher is not the installed path (fallback 2a is).
@@ -620,7 +624,6 @@ helper and sudoers rule do not change if the path/interface are preserved.
 - Exact `gstreamer-rs` vs Python capture parity.
 - Whether any app depends on `media.name=python3.12` or
   `library.name=videoconvert/libspa-videoconvert` (incidental).
-- Suspend/hibernate on the current kernel with the Rust stack.
 - Exact `inhibit` signature in `zbus_systemd` (if zbus is chosen).
 - Whether the delay inhibitor is reusable after each sleep cycle.
 

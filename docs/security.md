@@ -25,7 +25,7 @@ Automatic recovery requires exactly two privileged files:
 
 | File | Owner / mode | Purpose |
 | --- | --- | --- |
-| `/usr/local/libexec/jieli-usb-reset` | root:root 0755 | Isolated Python reset helper |
+| `/usr/local/libexec/jieli-usb-reset` | root:root 0755 | Isolated Rust reset helper (reference installation) |
 | `/etc/sudoers.d/90-jieli-camera-reset` | root:root 0440 | Authorizes one selected user |
 
 The generated sudoers command specification is:
@@ -36,9 +36,11 @@ SELECTED_USER ALL=(root) NOPASSWD: /usr/local/libexec/jieli-usb-reset ""
 
 `SELECTED_USER` is replaced with the explicitly supplied validated account.
 The trailing `""` restricts this command to **no arguments**. The helper also
-rejects arguments itself, and uses `/usr/bin/python3 -I` to ignore user Python
-import paths and environment customization. The bridge invokes a fixed
-absolute helper through `/usr/bin/sudo -n`; it never supplies a USB path or ID.
+rejects arguments itself. The reference installation uses the reproducible
+Rust binary; older installations may still contain the legacy isolated Python
+helper until they are upgraded with the original release's removal step and a
+reviewed Rust install. The bridge invokes the fixed absolute helper through
+`/usr/bin/sudo -n`; it never supplies a USB path or ID.
 
 The root helper:
 
@@ -58,9 +60,10 @@ best effort: a kernel-blocked ioctl may outlast it. The bridge's timeout and
 reset barrier do not authorize reopening over a failed or pending reset.
 
 The one-time root installer is itself reviewed trusted code. It checks the
-helper hash, privileged directory ancestry, conflicts and `visudo` output;
-installs the helper atomically before its rule; removes the rule first on
-rollback. Run it with `sudo /usr/bin/python3 -I`, from a checkout you reviewed.
+Rust helper hash, privileged directory ancestry, conflicts and `visudo` output;
+installs the helper and its manifest atomically before the rule; removes the
+rule first on rollback. Run it with `sudo /usr/bin/python3 -I`, from a checkout
+you reviewed after `tools/build-helper.sh build`.
 Do not replace this permission with broad passwordless sudo, a user-writable
 root service, or world-writable USB nodes.
 
