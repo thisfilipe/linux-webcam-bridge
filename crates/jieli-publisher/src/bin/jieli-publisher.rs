@@ -48,13 +48,12 @@ fn main() {
     }
 
     let home = home_dir();
-    if v4l2::enabled(&arguments.node_name, &home) {
-        eprintln!(
-            "publisher: V4L2 loopback output is not enabled in this build; PipeWire continues"
-        );
-    }
+    let v4l2_enabled = v4l2::enabled(&arguments.node_name, &home);
 
     let feed = Arc::new(Mutex::new(PublisherFeed::new(Duration::ZERO)));
+    if v4l2_enabled {
+        jieli_publisher::v4l2_writer::spawn(Arc::clone(&feed), &QUIT);
+    }
     {
         let feed = Arc::clone(&feed);
         std::thread::spawn(move || feed_stdin(feed, &QUIT));

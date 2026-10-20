@@ -214,7 +214,7 @@ three planes with the correct offsets and strides.
 | D3 | I/O | mmap, YU12 1280x720 30 fps, `exclusive_caps=1` (rw does not work in GStreamer 1.24.2) |
 | D4 | Device change | rebuild; never unload the module |
 | D5 | Isolation | a V4L2 failure does not affect PipeWire |
-| D6 | Status | discovery implemented and tested; the mmap writer is P4b; a V4L2 failure must never stop PipeWire |
+| D6 | Status | discovery implemented and tested; native mmap writer implemented and validated on the loopback (30 frames, 29.92 fps); a V4L2 failure never stops PipeWire |
 
 ### E. Root helper
 
@@ -685,8 +685,9 @@ helper and sudoers rule do not change if the path/interface are preserved.
 | 2026-10-19 | P3 test-source supervisor | `jieli-bridge --test-source`: `gstreamer-rs` 0.24.5 (GStreamer 1.24.2) `videotestsrc -> appsink -> publisher stdin`; state/report E2E 300 frames/10 s at 29.98 fps; consumer received 119 frames/4 s; real V4L2 capture, logind/sleep and helper reset still pending |
 | 2026-10-19 | P2 reproducibility | `tools/build-helper.sh` builds twice with remapped paths; byte-identical `jieli-usb-reset` (SHA-256 `8b82d909...`); installer wiring pending |
 | 2026-10-19 | P3 real capture gate | live stopped for a controlled window; Rust decoded MJPEG→I420, watchdog reset succeeded via the installed helper (reenumeration `008/009`), reached 667 frames at 29.58 fps; live restored and streaming at 28.37 fps; logind `Inhibit` acquire/release validated, but an actual suspend/`PrepareForSleep` E2E and the native V4L2 writer remain pending |
+| 2026-10-19 | P4b V4L2 writer | native `v4l` 0.14 mmap output, YU12 1280x720 30 fps, 8 buffers; controlled loopback test captured 30 frames at 29.92 fps; live service restored and streaming at 29.5 fps with its own V4L2 output active |
 
-**Next step:** P4b (native V4L2 writer via `v4l`), then installers/manifest, the
-Rust-helper hardware gate, and a suspend/resume gate for `PrepareForSleep`. The
+**Next step:** installers/manifest, the Rust-helper hardware gate, a
+suspend/resume gate for `PrepareForSleep`, and the P5/P6 cutover work. The
 remaining P0b items (EPIPE/EAGAIN reproduction, meta header population,
 watchdog/recreation) are folded into P4a. No runtime change until G8.

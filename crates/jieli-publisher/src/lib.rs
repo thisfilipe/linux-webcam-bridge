@@ -12,3 +12,6 @@ pub mod v4l2;
 
 #[cfg(feature = "native")]
 pub mod native;
+
+#[cfg(feature = "native")]
+pub mod v4l2_writer;
