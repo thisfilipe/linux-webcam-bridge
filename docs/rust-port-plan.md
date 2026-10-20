@@ -687,10 +687,10 @@ helper and sudoers rule do not change if the path/interface are preserved.
 | 2026-10-19 | P3 real capture gate | live stopped for a controlled window; Rust decoded MJPEG→I420, watchdog reset succeeded via the installed helper (reenumeration `008/009`), reached 667 frames at 29.58 fps; live restored and streaming at 28.37 fps; logind `Inhibit` acquire/release validated, but an actual suspend/`PrepareForSleep` E2E and the native V4L2 writer remain pending |
 | 2026-10-19 | P4b V4L2 writer | native `v4l` 0.14 mmap output, YU12 1280x720 30 fps, 8 buffers; controlled loopback test captured 30 frames at 29.92 fps; live service restored and streaming at 29.5 fps with its own V4L2 output active |
 | 2026-10-19 | P5 pre-cutover stack | live stopped; Rust real capture → native publisher; PipeWire consumer streamed for 5 s; V4L2 reader captured 30 frames at 29.92 fps; watchdog reset recovered at reenumeration `008/013`; live restored and streaming at ~29.5 fps; 3×120/Firefox, Rust-helper hardware and real suspend gates remain |
+| 2026-10-19 | G8 cutover | release binaries and Rust unit installed; Python programs/unit retained as rollback; systemd restart, reset recovery, 3×120 V4L2 at ~29.9 fps, 30.0 fps PipeWire consumer and 60 s stability passed; `NRestarts=0`, no test leftovers; Firefox headless crashes in this session, so manual Firefox and suspend/hibernate/reboot gates remain |
 
-**Next step:** P5 cutover needs explicit authorization (install the Rust binaries
-and unit, switch, run the 3×120 plus Firefox gate, rollback on failure). Also
-pending: the Rust-helper hardware gate and a real suspend/resume gate for
-`PrepareForSleep`. The remaining P0b items (EPIPE/EAGAIN reproduction, meta
-header population, watchdog/recreation) are folded into P4a. No runtime change
-until G8.
+**Next step:** user-facing validation (Snapshot/Firefox, suspend, hibernate,
+clean reboot), then the privileged Rust-helper swap and P6 cleanup. The
+installed service is Rust on `rust-port`; `main` remains Python until the
+change is reviewed and merged. Firefox headless must not be used in this
+session (renderer crash).

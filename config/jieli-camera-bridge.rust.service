@@ -1,0 +1,12 @@
+[Unit]
+Description=Jieli 720p30 camera bridge
+After=pipewire.service wireplumber.service
+
+[Service]
+ExecStart=%h/.local/libexec/jieli-bridge
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+
+[Install]
+WantedBy=default.target
