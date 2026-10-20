@@ -1,0 +1,17 @@
+[package]
+name = "jieli-core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Pure state, framing, placeholder and report logic for the Jieli camera bridge"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+sha2.workspace = true
+tempfile.workspace = true

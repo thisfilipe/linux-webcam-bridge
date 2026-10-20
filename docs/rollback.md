@@ -67,7 +67,25 @@ If another app uses the module, leave it loaded. To remove the DKMS package,
 review `apt remove v4l2loopback-dkms` yourself and accept only intended changes.
 The module will otherwise stay installed for other uses.
 
-## 4. Optional local cache cleanup
+## 4. Rust cutover rollback
+
+If the installed unit runs `~/.local/libexec/jieli-bridge`, restore the Python
+unit saved by the cutover instead of removing the installation:
+
+```sh
+systemctl --user stop jieli-camera-bridge.service
+cp -a "$HOME/.local/state/jieli-camera/cutover-<stamp>/jieli-camera-bridge.service" \
+  "$HOME/.config/systemd/user/jieli-camera-bridge.service"
+systemctl --user daemon-reload
+systemctl --user start jieli-camera-bridge.service
+```
+
+The Python programs were retained in `~/.local/libexec/` during the cutover.
+See [rust-cutover.md](rust-cutover.md) for the full procedure and validation
+scope. If no cutover backup exists, restore `config/jieli-camera-bridge.service`
+from the Python baseline.
+
+## 5. Optional local cache cleanup
 
 After reviewing them, remove this project's cache directory
 `${XDG_CACHE_HOME:-$HOME/.cache}/jieli-camera/` and repository `build/` output.

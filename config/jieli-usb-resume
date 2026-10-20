@@ -1,0 +1,60 @@
+#!/bin/sh
+# Restore the Jieli camera after a USB xHCI controller fails to resume.
+#
+# Install in /usr/lib/systemd/system-sleep/ (this systemd does not read /etc here).
+# systemd-sleep invokes this as: 50-jieli-usb-resume post suspend|hibernate
+# The controller below hosts only the USB root hubs used by the external
+# camera on this reference machine; rebind is attempted only when the camera
+# did not re-enumerate after resume.
+
+set -u
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+TAG=jieli-usb-resume
+CONTROLLER=0000:06:00.4
+DRIVER=/sys/bus/pci/drivers/xhci_hcd
+CAMERA=/dev/v4l/by-id/usb-Jieli_Technology_USB_PHY_2.0-video-index0
+
+[ "${1-}" = "post" ] || exit 0
+case "${2-}" in
+    suspend|hibernate) ;;
+    *) exit 0 ;;
+esac
+
+# Give udev and the USB core time to enumerate the camera normally.
+udevadm settle --timeout=5 2>/dev/null || true
+i=0
+while [ "$i" -lt 20 ]; do
+    if [ -e "$CAMERA" ]; then
+        logger -t "$TAG" "camera present after resume; no controller rebind needed"
+        exit 0
+    fi
+    sleep 0.25
+    i=$((i + 1))
+done
+
+if [ ! -e "$DRIVER/$CONTROLLER" ]; then
+    logger -t "$TAG" "controller $CONTROLLER is not bound; nothing to rebind"
+    exit 0
+fi
+if [ ! -w "$DRIVER/unbind" ] || [ ! -w "$DRIVER/bind" ]; then
+    logger -t "$TAG" "controller rebind sysfs is not writable"
+    exit 0
+fi
+
+logger -t "$TAG" "camera absent after resume; rebinding $CONTROLLER"
+printf '%s\n' "$CONTROLLER" >"$DRIVER/unbind" 2>/dev/null || true
+sleep 1
+printf '%s\n' "$CONTROLLER" >"$DRIVER/bind" 2>/dev/null || true
+
+i=0
+while [ "$i" -lt 40 ]; do
+    if [ -e "$CAMERA" ]; then
+        logger -t "$TAG" "camera returned after controller rebind"
+        exit 0
+    fi
+    sleep 0.25
+    i=$((i + 1))
+done
+
+logger -t "$TAG" "camera did not return after controller rebind"
+exit 0

@@ -54,6 +54,15 @@ does not save frames or transmit them over the network. Continuous decoding
 costs CPU/power; raw I420 is about 41 MB/s at 720p30 before copies. USB recovery
 briefly interrupts the webcam's composite microphone too.
 
+## Rust cutover status
+
+The `rust-port` branch has cut over the installed service to the Rust
+supervisor and publisher. The Python programs and the previous unit are kept
+as rollback until the user-facing Firefox, suspend, hibernate and reboot checks
+pass. See [Rust cutover](docs/rust-cutover.md) for the installed layout,
+validation scope and rollback. `main` remains the Python baseline until that
+review is complete.
+
 ## Start here
 
 1. Check the [supported environment and installation steps](docs/installation.md).

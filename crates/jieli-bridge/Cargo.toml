@@ -1,0 +1,33 @@
+[package]
+name = "jieli-bridge"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Supervisor for the Jieli camera bridge: capture, publisher lifecycle and report"
+
+[features]
+default = []
+native = [
+    "dep:gstreamer",
+    "dep:gstreamer-app",
+    "dep:zbus",
+    "dep:futures-util",
+]
+
+[dependencies]
+jieli-core = { path = "../jieli-core" }
+libc.workspace = true
+gstreamer = { version = "0.24.5", optional = true }
+gstreamer-app = { version = "0.24.5", optional = true }
+zbus = { version = "6.0.0", optional = true }
+futures-util = { version = "0.3", optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[[bin]]
+name = "jieli-bridge"
+path = "src/bin/jieli-bridge.rs"
+required-features = ["native"]

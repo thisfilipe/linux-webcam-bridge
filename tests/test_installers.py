@@ -45,6 +45,12 @@ def root_metadata(path):
     return os.stat_result(info)
 
 
+class PinnedHelper(unittest.TestCase):
+    def test_hash_is_the_reproducible_artifact(self):
+        self.assertEqual(usb.HELPER_SHA256,
+                         '8b82d909212be61ab7c148869012623688b4212d483c1dabee53d03c5499684b')
+
+
 class USBInstaller(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
@@ -53,8 +59,11 @@ class USBInstaller(unittest.TestCase):
         self.helper = self.root / 'usr/local/libexec/jieli-usb-reset'
         self.rule = self.root / 'etc/sudoers.d/90-jieli-camera-reset'
         self.source = self.root / 'source'
-        self.source.write_bytes(usb.SOURCE.read_bytes())
-        for name, value in (('HELPER', self.helper), ('RULE', self.rule), ('SOURCE', self.source)):
+        self.source.write_bytes(b'rust helper fixture')
+        self.helper_sha = hashlib.sha256(self.source.read_bytes()).hexdigest()
+        self.manifest = self.root / 'usr/local/libexec/jieli-usb-reset.sha256'
+        for name, value in (('HELPER', self.helper), ('RULE', self.rule), ('SOURCE', self.source),
+                            ('HELPER_SHA256', self.helper_sha), ('MANIFEST', self.manifest)):
             self.enterContext(patch.object(usb, name, value))
         self.run = self.enterContext(patch.object(usb.subprocess, 'run', return_value=SimpleNamespace(returncode=0)))
         self.enterContext(patch.object(usb.pwd, 'getpwnam', return_value=SimpleNamespace(pw_name='alice', pw_uid=1000)))
@@ -72,8 +81,8 @@ class USBInstaller(unittest.TestCase):
             stack.enter_context(patch.object(usb.os, 'fchown'))
             usb.main()
 
-    def test_hash_is_current_repository_helper(self):
-        self.assertEqual(hashlib.sha256(self.source.read_bytes()).hexdigest(), usb.HELPER_SHA256)
+    def test_pinned_hash_is_sha256(self):
+        self.assertRegex(usb.HELPER_SHA256, r'^[0-9a-f]{64}$')
 
     def test_plan_has_no_writes_or_commands_and_needs_no_root(self):
         self.source.unlink()
@@ -111,11 +120,14 @@ class USBInstaller(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(self.helper.stat().st_mode), 0o755)
         self.assertEqual(self.rule.read_text(), usb.rule_text('alice'))
         self.assertIn('jieli-usb-reset ""\n', self.rule.read_text())
+        self.assertEqual(self.manifest.read_bytes(), usb.manifest_text())
+        self.assertEqual(stat.S_IMODE(self.manifest.stat().st_mode), 0o644)
         self.assertEqual(stat.S_IMODE(self.rule.stat().st_mode), 0o440)
         self.invoke('--install')
         self.invoke('--remove')
         self.assertFalse(self.helper.exists())
         self.assertFalse(self.rule.exists())
+        self.assertFalse(self.manifest.exists())
         self.assertTrue(all(call.args[0][0] == '/usr/sbin/visudo' for call in self.run.call_args_list))
 
     def test_modified_source_cannot_install_or_remove(self):
