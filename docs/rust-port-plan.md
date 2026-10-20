@@ -397,9 +397,10 @@ The reference installation has now replaced the Python helper with this
 reproducible Rust binary (SHA-256 `8b82d909...`) and recorded the installed
 hash alongside it; the Python helper remains as a root-owned rollback copy.
 A real reset through the bridge's `/usr/bin/sudo -n` path passed. The USB
-installer now consumes the reproducible `dist/jieli-usb-reset` artifact and
-verifies its manifest; the remaining P6 installer work is the user-file and
-V4L2 tooling and the Python-runtime removal.
+installer consumes the reproducible `dist/jieli-usb-reset` artifact and
+verifies its manifest. The user-file installer is now the Rust
+`jieli-install` binary (plan, install, remove, manifest and backups); the
+remaining P6 work is the V4L2 tooling and the Python-runtime removal.
 
 ---
 
@@ -697,14 +698,15 @@ helper and sudoers rule do not change if the path/interface are preserved.
 | 2026-10-20 | Suspend/resume failure | real resume logged `xhci_hcd 0000:06:00.4: HC died; cleaning up` and `failed to resume async: -110`; the USB camera disappeared and only a reboot restored it. Bridge now treats helper `found 0` as a retryable missing device instead of `exhausted`; added prepare/resume/teardown logging and a scoped xHCI resume-rebind hook. Hook installed in `/usr/lib/systemd/system-sleep`; suspend retested twice and hibernate twice successfully, including Snapshot active; hook ran automatically and the camera re-enumerated without requiring its rebind path |
 | 2026-10-20 | Rust helper installed | reproducible `jieli-usb-reset` hash `8b82d909...` installed with the unchanged sudoers path; Python helper backed up; real reset through `/usr/bin/sudo -n` reenumerated `008/008` and the bridge returned to streaming |
 | 2026-10-20 | Rust merge | `rust-port` merged into local `main` without a remote push; Python, patched plugin and resume hook retained; P6 user/V4L2 installer cleanup remains |
+| 2026-10-20 | Rust user installer | `jieli-install` implements plan/install/remove, manifest, backups, symlink and modified-file protection; live install archived current files, recorded the manifest and the service returned to streaming |
 
 **Next step:** P6 packaging cleanup. The Rust stack is merged into `main`
 locally (no remote push), the privileged helper is the reproducible Rust
 binary and a real reset passed, and suspend/hibernate/reboot checks all passed.
-The USB installer consumes the Rust artifact; the user-file and V4L2 installers
-still need Rust/current-layout integration, and the Python rollback files are
-intentionally retained for now. Manual Firefox/WebRTC remains blocked by a
-local Firefox crash; Edge/Meet demonstrated real WebRTC video with camera
-switching and close/reopen. The xHCI hook is installed in
+The USB installer consumes the Rust artifact; the Rust user-file installer is
+now integrated and was exercised against the live installation. The V4L2
+tooling and the intentional Python rollback removal remain. Manual
+Firefox/WebRTC remains blocked by a local Firefox crash; Edge/Meet demonstrated
+real WebRTC video with camera switching and close/reopen. The xHCI hook is installed in
 `/usr/lib/systemd/system-sleep` and ran automatically during hibernate; its
 rebind path remains the fallback.

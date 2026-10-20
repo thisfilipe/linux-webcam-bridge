@@ -1,0 +1,21 @@
+[package]
+name = "jieli-install"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Safe user-file installer and remover for the Rust Jieli camera bridge"
+
+[[bin]]
+name = "jieli-install"
+path = "src/bin/jieli-install.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

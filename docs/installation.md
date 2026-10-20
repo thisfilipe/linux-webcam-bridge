@@ -72,7 +72,7 @@ privileged steps. No one-line download-and-run installer is provided.
 python3 tools/build-plugin.py
 python3 tests/check_pool.py
 python3 -m unittest discover -s tests -p 'test_*.py'
-cargo build --release -p jieli-bridge -p jieli-publisher \
+cargo build --release -p jieli-bridge -p jieli-publisher -p jieli-install \
   --features jieli-bridge/native,jieli-publisher/native
 tools/build-helper.sh build
 ```
@@ -108,34 +108,42 @@ version 1.6.8. Do not set these variables globally in your login environment.
 ## 3. Install the user files
 
 Stop the service before replacing files; this ends physical capture and may
-require a reconnect on the affected device. Review and archive any existing
-destinations first. The installed unit uses `%h`, so it does not depend on your
-checkout directory or account name. Runtime status uses `$XDG_RUNTIME_DIR`;
-caches and flags follow `XDG_CACHE_HOME` / `XDG_CONFIG_HOME`.
+require a reconnect on the affected device. Run the installer from the
+repository root. The default plan changes nothing:
 
 ```sh
 systemctl --user stop jieli-camera-bridge.service
 
-install -Dm755 target/release/jieli-bridge ~/.local/libexec/jieli-bridge
-install -Dm755 target/release/jieli-publisher ~/.local/libexec/jieli-publisher
-install -Dm644 config/jieli-camera-bridge.rust.service \
-  ~/.config/systemd/user/jieli-camera-bridge.service
-install -Dm644 config/90-jieli-bridge.conf \
-  ~/.config/wireplumber/wireplumber.conf.d/90-jieli-bridge.conf
-install -Dm755 build/plugin/libgstpipewire.so \
-  ~/.local/lib/jieli-gstreamer/libgstpipewire.so
+target/release/jieli-install
+target/release/jieli-install --install
 ```
 
-This installs the Rust supervisor and publisher, the Rust unit, the
-WirePlumber camera-filter rule and the locally built PipeWire plugin. It does
-not start the service. The legacy `tools/setup-user.py` installs the retained
-Python rollback files, not the Rust runtime; do not run it for a new Rust
-installation. If replacing an existing Rust installation, keep a private copy
-of any files you customized.
+The installer writes the Rust supervisor and publisher, the Rust unit, the
+WirePlumber camera-filter rule and the locally built plugin
+(`build/plugin/libgstpipewire.so`). It refuses to run while the unit is active,
+refuses symlinks and different existing files unless `--replace` is explicitly
+reviewed, archives replaced files under
+`${XDG_STATE_HOME:-$HOME/.local/state}/jieli-camera/backups/`, and records a
+manifest at `${XDG_STATE_HOME:-$HOME/.local/state}/jieli-camera/installed-files.json`.
+
+Use a custom plugin path with `--plugin /path/to/libgstpipewire.so`. Removal
+uses the same manifest and refuses modified files:
+
+```sh
+systemctl --user stop jieli-camera-bridge.service
+target/release/jieli-install --remove
+```
+
+The installer never starts or stops the service. The installed unit uses `%h`,
+so it does not depend on your checkout directory or account name. Runtime
+status uses `$XDG_RUNTIME_DIR`; caches and flags follow `XDG_CACHE_HOME` /
+`XDG_CONFIG_HOME`.
 
 The publisher prefers `~/.local/lib/jieli-gstreamer/libgstpipewire.so`; this is
 the patched plugin that releases stale buffer slots after an unclean consumer.
-Do not remove it while the Rust service is installed.
+Do not remove it while the Rust service is installed. The legacy
+`tools/setup-user.py` installs the retained Python rollback files, not the Rust
+runtime; do not run it for a new Rust installation.
 
 ## 4. Enable automatic USB recovery
 

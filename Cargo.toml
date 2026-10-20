@@ -5,6 +5,7 @@ members = [
     "crates/jieli-usb",
     "crates/jieli-publisher",
     "crates/jieli-bridge",
+    "crates/jieli-install",
 ]
 
 [workspace.package]

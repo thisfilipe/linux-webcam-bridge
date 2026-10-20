@@ -64,9 +64,10 @@ previous helper are retained as rollback; they are not started by the installed
 Rust unit. See [Rust cutover](docs/rust-cutover.md) for the installed layout,
 validation scope and rollback.
 
-The portable user-file and V4L2 installers are still the legacy Python tools;
-the Rust helper now has a reproducible artifact and manifest, and the runtime
-does not depend on Python. P6 packaging cleanup remains tracked in the
+The user-file installer is now the Rust `jieli-install` binary with a manifest,
+backups and modified-file protection. The V4L2 setup remains the legacy Python
+tool; the Rust helper already has a reproducible artifact and manifest. The
+runtime does not depend on Python. P6 packaging cleanup remains tracked in the
 [Rust port plan](docs/rust-port-plan.md).
 
 ## Start here
@@ -106,7 +107,7 @@ it has not been reinstalled over that deployment. See [full validation scope](do
 
 | Path | Purpose |
 | --- | --- |
-| `crates/` | Rust supervisor, core state machine, publisher and privileged reset helper |
+| `crates/` | Rust supervisor, core state machine, publisher, privileged reset helper and user installer |
 | `src/` | Legacy Python baseline retained for rollback/oracle |
 | `patches/` | Patch against upstream PipeWire 1.6.8 |
 | `tools/` | Reproducible builds, explicit installers, opt-in consumer checks |

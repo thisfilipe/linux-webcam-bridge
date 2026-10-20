@@ -13,9 +13,12 @@ reviewing removals:
 
 ```sh
 systemctl --user disable --now jieli-camera-bridge.service
+target/release/jieli-install --remove
 ```
 
-Remove only the files you recognize as this installation. Keep
+The Rust installer verifies its manifest and refuses modified files. If no
+manifest exists (for example, an older manual installation), remove only the
+files you recognize as this installation. Keep
 `~/.local/lib/jieli-gstreamer/libgstpipewire.so` if another local build uses
 it, and keep the Python files if you still want the rollback path.
 
