@@ -102,14 +102,20 @@ Two mitigations are prepared:
   `sudo install -m 0755 config/jieli-usb-resume /usr/lib/systemd/system-sleep/50-jieli-usb-resume`.
   This systemd version reads only `/usr/lib/systemd/system-sleep/`; `/etc` is not a hook path here.
 
-Do not remove the hook on the reference machine until suspend/resume has been
-retested with it. The next controlled test must be done by the user; reboot is
-the fallback if the controller still does not return.
+The hook is installed at
+`/usr/lib/systemd/system-sleep/50-jieli-usb-resume`; this systemd version does
+not read `/etc/systemd/system-sleep`. Its no-op path was verified manually
+(`camera present after resume; no controller rebind needed`). The rebind path
+itself has not yet been exercised by a controller failure.
+
+Suspend/resume was tested twice after the bridge fix, including with Snapshot
+active; the camera and playback recovered without a reboot. Hibernate remains
+untested. Reboot remains the fallback if the controller still does not return.
 
 The headless Firefox check is not usable in this reference session: Firefox
-crashes in its software renderer before returning metadata. Test Firefox
-manually, with the normal desktop session. The clean reboot gate passed after
-the camera returned; suspend/hibernate remain under test.
+crashes in its software renderer before returning metadata. Edge/Meet WebRTC
+was validated with camera switching and close/reopen. The clean reboot gate
+passed after the camera returned.
 
 ## Rollback
 
