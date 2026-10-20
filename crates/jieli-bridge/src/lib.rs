@@ -5,6 +5,8 @@
 //! exercises the full capture -> stdin -> PipeWire path without the camera.
 
 pub mod args;
+pub mod device;
+pub mod reset;
 
 #[cfg(feature = "native")]
 pub mod capture;

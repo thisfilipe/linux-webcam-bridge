@@ -684,8 +684,9 @@ helper and sudoers rule do not change if the path/interface are preserved.
 | 2026-10-19 | P4a PipeWire publisher | `jieli-publisher` native PipeWire + stdin framing/placeholder + CLI/PID/signals + V4L2 discovery; smoke 118 frames in ~4 s; live service unaffected; V4L2 writer pending |
 | 2026-10-19 | P3 test-source supervisor | `jieli-bridge --test-source`: `gstreamer-rs` 0.24.5 (GStreamer 1.24.2) `videotestsrc -> appsink -> publisher stdin`; state/report E2E 300 frames/10 s at 29.98 fps; consumer received 119 frames/4 s; real V4L2 capture, logind/sleep and helper reset still pending |
 | 2026-10-19 | P2 reproducibility | `tools/build-helper.sh` builds twice with remapped paths; byte-identical `jieli-usb-reset` (SHA-256 `8b82d909...`); installer wiring pending |
+| 2026-10-19 | P3 real capture gate | live stopped for a controlled window; Rust decoded MJPEG→I420, watchdog reset succeeded via the installed helper (reenumeration `008/009`), reached 667 frames at 29.58 fps; live restored and streaming at 28.37 fps; logind sleep monitor and native V4L2 writer still pending |
 
-**Next step:** finish P3 with real V4L2 capture, logind sleep handling and
-helper reset, then P4b (native V4L2 writer), then installers/manifest. The
-remaining P0b items (EPIPE/EAGAIN reproduction, meta header population,
+**Next step:** port the logind sleep monitor (inhibit + PrepareForSleep), then P4b
+(native V4L2 writer), then installers/manifest and the Rust-helper hardware gate.
+The remaining P0b items (EPIPE/EAGAIN reproduction, meta header population,
 watchdog/recreation) are folded into P4a. No runtime change until G8.

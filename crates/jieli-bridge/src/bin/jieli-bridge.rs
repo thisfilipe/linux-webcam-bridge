@@ -1,11 +1,14 @@
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use jieli_bridge::args::{ArgsError, USAGE, parse_args};
-use jieli_bridge::capture::{Capture, CaptureCallbacks};
+use jieli_bridge::capture::{Capture, CaptureCallbacks, CaptureSource};
+use jieli_bridge::device;
 use jieli_bridge::publisher::PublisherManager;
+use jieli_bridge::reset::ResetManager;
 use jieli_core::frame::Frame;
 use jieli_core::state::{Action, BridgeConfig, BridgeState};
 
@@ -29,15 +32,21 @@ fn main() {
         }
     };
 
-    if !arguments.test_source {
-        eprintln!("jieli-bridge: real V4L2 capture is not ported yet; use --test-source");
-        std::process::exit(2);
-    }
-
     if let Err(error) = gstreamer::init() {
         eprintln!("jieli-bridge: GStreamer initialization failed: {error}");
         std::process::exit(1);
     }
+
+    let source = if arguments.test_source {
+        CaptureSource::Test
+    } else {
+        CaptureSource::V4l2(PathBuf::from(device::DEVICE_PATH))
+    };
+    let description = if arguments.test_source {
+        "Jieli validation"
+    } else {
+        "Jieli 720p30"
+    };
 
     install_signals();
     let start = Arc::new(Instant::now());
@@ -50,10 +59,31 @@ fn main() {
     )));
     let frame_tx: Arc<Mutex<Option<SyncSender<Frame>>>> = Arc::new(Mutex::new(None));
     let mut publisher = PublisherManager::new(frame_tx.clone());
+    let mut reset = ResetManager::new();
     let mut capture: Option<Capture> = None;
 
     loop {
         let now = start.elapsed().as_secs_f64();
+
+        if let Some(result) = reset.poll() {
+            let actions = state
+                .lock()
+                .map(|mut state| state.reset_finished(now, result))
+                .unwrap_or_default();
+            apply_actions(
+                actions,
+                &state,
+                &mut capture,
+                &mut publisher,
+                &mut reset,
+                &frame_tx,
+                &start,
+                &source,
+                description,
+                &arguments.node_name,
+                now,
+            );
+        }
 
         if let Some(active) = capture.as_ref()
             && let Some(reason) = active.poll_error()
@@ -67,8 +97,11 @@ fn main() {
                 &state,
                 &mut capture,
                 &mut publisher,
+                &mut reset,
                 &frame_tx,
                 &start,
+                &source,
+                description,
                 &arguments.node_name,
                 now,
             );
@@ -80,8 +113,13 @@ fn main() {
             state.publisher_exited(now);
         }
 
+        let identity = if arguments.test_source {
+            Some("synthetic".to_string())
+        } else {
+            device::identity(Path::new(device::DEVICE_PATH))
+        };
         let actions = match state.lock() {
-            Ok(mut state) => state.tick(now, Some("synthetic"), true),
+            Ok(mut state) => state.tick(now, identity.as_deref(), true),
             Err(_) => break,
         };
         apply_actions(
@@ -89,8 +127,11 @@ fn main() {
             &state,
             &mut capture,
             &mut publisher,
+            &mut reset,
             &frame_tx,
             &start,
+            &source,
+            description,
             &arguments.node_name,
             now,
         );
@@ -120,8 +161,11 @@ fn main() {
         &state,
         &mut capture,
         &mut publisher,
+        &mut reset,
         &frame_tx,
         &start,
+        &source,
+        description,
         &arguments.node_name,
         start.elapsed().as_secs_f64(),
     );
@@ -138,14 +182,17 @@ fn apply_actions(
     state: &Arc<Mutex<BridgeState>>,
     capture: &mut Option<Capture>,
     publisher: &mut PublisherManager,
+    reset: &mut ResetManager,
     frame_tx: &Arc<Mutex<Option<SyncSender<Frame>>>>,
     start: &Arc<Instant>,
+    source: &CaptureSource,
+    description: &str,
     node_name: &str,
     now: f64,
 ) {
     for action in actions {
         match action {
-            Action::StartPublisher => match publisher.start(node_name, "Jieli validation") {
+            Action::StartPublisher => match publisher.start(node_name, description) {
                 Ok(()) => {
                     if let Ok(mut state) = state.lock() {
                         state.publisher_started();
@@ -172,7 +219,7 @@ fn apply_actions(
                     frame_tx: frame_tx.clone(),
                     start: start.clone(),
                 };
-                match Capture::start(true, generation, callbacks) {
+                match Capture::start(source, generation, callbacks) {
                     Ok(active) => {
                         *capture = Some(active);
                         if let Ok(mut state) = state.lock() {
@@ -198,9 +245,16 @@ fn apply_actions(
                 }
             }
             Action::BeginReset => {
-                eprintln!("jieli-bridge: reset requested in test-source mode; ignored");
+                if reset.is_running() {
+                    continue;
+                }
+                reset.begin();
+                println!("Resetting USB");
             }
-            Action::ReleaseSleepInhibitor => {}
+            Action::ReleaseSleepInhibitor => {
+                // The logind sleep monitor is not ported yet; the P3 hardware
+                // window runs without suspend and keeps the state inhibited.
+            }
         }
     }
 }

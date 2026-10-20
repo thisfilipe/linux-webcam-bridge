@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -10,6 +11,26 @@ use jieli_core::frame::Frame;
 use jieli_core::state::{BridgeState, FrameOutcome};
 
 pub const CAPS: &str = "video/x-raw,format=I420,width=1280,height=720,framerate=30/1";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CaptureSource {
+    Test,
+    V4l2(PathBuf),
+}
+
+impl CaptureSource {
+    pub fn description(&self) -> String {
+        match self {
+            Self::Test => format!("videotestsrc is-live=true pattern=ball ! {CAPS}"),
+            Self::V4l2(device) => format!(
+                "v4l2src device=\"{}\" io-mode=mmap do-timestamp=true ! \
+                 image/jpeg,width=1280,height=720,framerate=30/1 ! \
+                 jpegparse ! jpegdec ! videoconvert ! {CAPS}",
+                device.display()
+            ),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct CaptureCallbacks {
@@ -25,18 +46,14 @@ pub struct Capture {
 
 impl Capture {
     pub fn start(
-        test_source: bool,
+        source: &CaptureSource,
         generation: u64,
         callbacks: CaptureCallbacks,
     ) -> Result<Self, String> {
-        if !test_source {
-            return Err("real V4L2 capture is not ported yet; use --test-source".to_string());
-        }
-
+        let source_description = source.description();
         let description = format!(
-            "videotestsrc is-live=true pattern=ball ! {CAPS} ! \
-             appsink name=frames emit-signals=true sync=false max-buffers=2 drop=true \
-             enable-last-sample=false"
+            "{source_description} ! appsink name=frames emit-signals=true sync=false \
+             max-buffers=2 drop=true enable-last-sample=false"
         );
         let pipeline = gst::parse::launch(&description)
             .map_err(|error| format!("capture construction failed: {error}"))?
@@ -121,5 +138,28 @@ impl Capture {
             return Err("capture teardown did not reach NULL".to_string());
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_source_uses_videotestsrc_and_i420() {
+        let description = CaptureSource::Test.description();
+        assert!(description.contains("videotestsrc is-live=true"));
+        assert!(description.contains(CAPS));
+    }
+
+    #[test]
+    fn real_source_matches_the_live_mjpeg_decode_chain() {
+        let description =
+            CaptureSource::V4l2(PathBuf::from("/dev/v4l/by-id/jieli-video0")).description();
+        assert!(description.contains("v4l2src device=\"/dev/v4l/by-id/jieli-video0\""));
+        assert!(description.contains("io-mode=mmap"));
+        assert!(description.contains("image/jpeg,width=1280,height=720,framerate=30/1"));
+        assert!(description.contains("jpegparse ! jpegdec ! videoconvert"));
+        assert!(description.contains(CAPS));
     }
 }
