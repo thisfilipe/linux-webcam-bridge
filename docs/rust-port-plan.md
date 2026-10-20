@@ -580,7 +580,7 @@ until the native publisher passes G6 on real hardware.
 | P4a | Native publisher, PipeWire only | G6 | 5–8 d |
 | P4b | Native V4L2 output | 3×120 plus Firefox | 2–4 d |
 | P5 | Full Rust stack plus cutover | G7–G8 | 4–6 d |
-| P6 | Rust installers/tools, remove Python/patch | G9 | 3–5 d |
+| P6 | Rust installers/tools, remove Python runtime, install/retain the patched PipeWire plugin | G9 | 3–5 d |
 
 \* rough estimate, not a commitment.
 

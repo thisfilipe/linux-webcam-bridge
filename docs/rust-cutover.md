@@ -110,4 +110,8 @@ Python supervisor; no separate unit is required.
 
 After the Rust version has passed the user-facing checks, the Python files and
 the legacy `src/` implementation can be removed in the P6 cleanup. Keep the
-cutover backup until that cleanup is reviewed.
+cutover backup until that cleanup is reviewed. Do not remove the local patched
+PipeWire plugin (`~/.local/lib/jieli-gstreamer/libgstpipewire.so`): the
+GStreamer publisher prefers it for safe buffer recycling after an unclean
+consumer; P6 must install or retain it and document the fallback to the system
+plugin.
