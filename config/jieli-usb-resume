@@ -1,6 +1,7 @@
 #!/bin/sh
 # Restore the Jieli camera after a USB xHCI controller fails to resume.
 #
+# Install in /usr/lib/systemd/system-sleep/ (this systemd does not read /etc here).
 # systemd-sleep invokes this as: 50-jieli-usb-resume post suspend|hibernate
 # The controller below hosts only the USB root hubs used by the external
 # camera on this reference machine; rebind is attempted only when the camera

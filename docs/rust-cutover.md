@@ -99,7 +99,8 @@ Two mitigations are prepared:
 - `config/jieli-usb-resume` is a systemd-sleep `post` hook that rebinds only the
   affected xHCI controller (`0000:06:00.4`) when the camera is still absent
   after resume and waits for re-enumeration. It must be installed as root:
-  `sudo install -m 0755 config/jieli-usb-resume /etc/systemd/system-sleep/50-jieli-usb-resume`.
+  `sudo install -m 0755 config/jieli-usb-resume /usr/lib/systemd/system-sleep/50-jieli-usb-resume`.
+  This systemd version reads only `/usr/lib/systemd/system-sleep/`; `/etc` is not a hook path here.
 
 Do not remove the hook on the reference machine until suspend/resume has been
 retested with it. The next controlled test must be done by the user; reboot is
